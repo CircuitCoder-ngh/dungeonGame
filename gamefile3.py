@@ -55,6 +55,9 @@ class Player:
         self.direction = 0
         self.sprite = None
         self.size = 24
+
+        # add multishot flag
+        self.has_multi_shot = False
         
         # Define abilities
         self.abilities = {
@@ -93,16 +96,31 @@ class Player:
                         enemy.take_damage(ability.damage)
                         
         elif ability_name == "projectile":
-            projectile = Projectile(
-                self.x + cos(self.direction) * self.size,
-                self.y + sin(self.direction) * self.size,
-                self.direction,
-                10,
-                ability.damage,
-                ability.range
-            )
-            self.projectiles.append(projectile)
-            
+            if self.has_multi_shot:
+                # Fire in four directions: N, S, E, W
+                directions = [0, pi/2, pi, 3*pi/2]  # East, South, West, North
+                for direction in directions:
+                    projectile = Projectile(
+                        self.x + cos(direction) * self.size,
+                        self.y + sin(direction) * self.size,
+                        direction,
+                        10,
+                        ability.damage,
+                        ability.range
+                    )
+                    self.projectiles.append(projectile)
+            else:
+                # Original single projectile logic
+                projectile = Projectile(
+                    self.x + cos(self.direction) * self.size,
+                    self.y + sin(self.direction) * self.size,
+                    self.direction,
+                    10,
+                    ability.damage,
+                    ability.range
+                )
+                self.projectiles.append(projectile)
+                
         ability.use()
 
     def move(self, dx: int, dy: int, walls: List[pygame.Rect]):
@@ -145,6 +163,7 @@ class PowerUpType(Enum):
     DAMAGE = "damage"
     SPEED = "speed"
     COOLDOWN = "cooldown"
+    MULTI_SHOT = "multi_shot"
 
 class PowerUp:
     def __init__(self, x: int, y: int, power_up_type: PowerUpType):
@@ -176,6 +195,9 @@ class PowerUp:
             # Reduce all ability cooldowns by 10%
             for ability in player.abilities.values():
                 ability.cooldown *= 0.9
+        elif self.type == PowerUpType.MULTI_SHOT:
+            player.has_multi_shot = True
+            
 
 class Enemy:
     def __init__(self, x: int, y: int, is_boss: bool = False):
@@ -613,6 +635,7 @@ class Game:
             
             # Spawn a power-up
             power_up_type = random.choice(list(PowerUpType))
+            # power_up_type = PowerUpType.MULTI_SHOT
             power_up = PowerUp(current_room.width // 2, current_room.height // 2, power_up_type)
             current_room.power_ups.append(power_up)
             
@@ -799,6 +822,8 @@ class Game:
                 color = (0, 255, 255)  # Cyan for speed
             elif power_up.type == PowerUpType.COOLDOWN:
                 color = (255, 255, 0)  # Yellow for cooldown
+            else:
+                color = (255, 120, 0)
             
             pygame.draw.circle(self.screen, color,
                             (int(power_up_screen_x), int(power_up_screen_y)),
