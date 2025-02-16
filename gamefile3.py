@@ -191,6 +191,26 @@ class Direction(Enum):
     EAST = (1, 0)
     WEST = (-1, 0)
 
+class Camera:
+    def __init__(self, width: int, height: int):
+        self.width = width
+        self.height = height
+        self.x = 0
+        self.y = 0
+        
+    def update(self, target_x: int, target_y: int, room_width: int, room_height: int):
+        # Center the camera on the target (player)
+        self.x = target_x - self.width // 2
+        self.y = target_y - self.height // 2
+        
+        # Keep the camera within room bounds
+        self.x = max(0, min(self.x, room_width - self.width))
+        self.y = max(0, min(self.y, room_height - self.height))
+        
+    def apply(self, entity_x: int, entity_y: int) -> Tuple[int, int]:
+        # Transform entity coordinates to screen coordinates
+        return entity_x - self.x, entity_y - self.y
+
 class RoomType(Enum):
     START = "start"
     NORMAL = "normal"
@@ -202,8 +222,8 @@ class Room:
         self.grid_x = x
         self.grid_y = y
         self.room_type = room_type
-        self.width = 800
-        self.height = 600
+        self.width = 1600
+        self.height = 1200
         self.walls: List[pygame.Rect] = []
         self.enemies: List[Enemy] = []
         self.doors: Dict[Direction, bool] = {
@@ -247,17 +267,17 @@ class Room:
             self.walls.extend([
                 pygame.Rect(0, 0, self.width // 2 - door_width // 2, wall_thickness),
                 pygame.Rect(self.width // 2 + door_width // 2, 0, 
-                          self.width // 2 - door_width // 2, wall_thickness)
+                        self.width // 2 - door_width // 2, wall_thickness)
             ])
         
         # Bottom wall with potential door
         if not self.doors[Direction.SOUTH]:
             self.walls.extend([
                 pygame.Rect(0, self.height - wall_thickness, 
-                          self.width // 2 - door_width // 2, wall_thickness),
+                        self.width // 2 - door_width // 2, wall_thickness),
                 pygame.Rect(self.width // 2 + door_width // 2, 
-                          self.height - wall_thickness,
-                          self.width // 2 - door_width // 2, wall_thickness)
+                        self.height - wall_thickness,
+                        self.width // 2 - door_width // 2, wall_thickness)
             ])
         
         # Left wall with potential door
@@ -265,25 +285,28 @@ class Room:
             self.walls.extend([
                 pygame.Rect(0, 0, wall_thickness, self.height // 2 - door_width // 2),
                 pygame.Rect(0, self.height // 2 + door_width // 2,
-                          wall_thickness, self.height // 2 - door_width // 2)
+                        wall_thickness, self.height // 2 - door_width // 2)
             ])
         
         # Right wall with potential door
         if not self.doors[Direction.EAST]:
             self.walls.extend([
                 pygame.Rect(self.width - wall_thickness, 0,
-                          wall_thickness, self.height // 2 - door_width // 2),
+                        wall_thickness, self.height // 2 - door_width // 2),
                 pygame.Rect(self.width - wall_thickness, 
-                          self.height // 2 + door_width // 2,
-                          wall_thickness, self.height // 2 - door_width // 2)
+                        self.height // 2 + door_width // 2,
+                        wall_thickness, self.height // 2 - door_width // 2)
             ])
             
-        # Add random obstacles if this is not a boss or treasure room
+        # Add more random obstacles for larger rooms
         if self.room_type not in [RoomType.BOSS, RoomType.TREASURE]:
-            for _ in range(5):
+            num_obstacles = 15  # More obstacles for larger rooms
+            for _ in range(num_obstacles):
                 x = random.randint(wall_thickness + 50, self.width - wall_thickness - 100)
                 y = random.randint(wall_thickness + 50, self.height - wall_thickness - 100)
-                self.walls.append(pygame.Rect(x, y, 50, 50))
+                obstacle_width = random.randint(30, 80)
+                obstacle_height = random.randint(30, 80)
+                self.walls.append(pygame.Rect(x, y, obstacle_width, obstacle_height))
 
 class DungeonMap:
     def __init__(self, size: int = 5):
@@ -414,8 +437,13 @@ class Game:
         
         self.dungeon = DungeonMap(size=8)  # Create 8 rooms
         self.minimap = Minimap(self.dungeon)
-        self.player = Player(self.width // 2, self.height // 2)
+        current_room = self.dungeon.rooms[self.dungeon.current_room_pos]
+        safe_x, safe_y = self._find_safe_position(current_room, self.width // 2, self.height // 2)
+        self.player = Player(safe_x, safe_y)
         
+        # Add camera
+        self.camera = Camera(self.width, self.height)
+
         # Mark starting room as explored
         self.dungeon.rooms[self.dungeon.current_room_pos].explored = True
     
@@ -423,12 +451,12 @@ class Game:
         current_room = self.dungeon.rooms[self.dungeon.current_room_pos]
         player_rect = pygame.Rect(self.player.x, self.player.y, 32, 32)
         
-        # Define door areas
+        # Define door areas for a larger room
         door_areas = {
-            Direction.NORTH: pygame.Rect(self.width // 2 - 40, 0, 80, 20),
-            Direction.SOUTH: pygame.Rect(self.width // 2 - 40, self.height - 20, 80, 20),
-            Direction.WEST: pygame.Rect(0, self.height // 2 - 40, 20, 80),
-            Direction.EAST: pygame.Rect(self.width - 20, self.height // 2 - 40, 20, 80)
+            Direction.NORTH: pygame.Rect(current_room.width // 2 - 40, 0, 80, 20),
+            Direction.SOUTH: pygame.Rect(current_room.width // 2 - 40, current_room.height - 20, 80, 20),
+            Direction.WEST: pygame.Rect(0, current_room.height // 2 - 40, 20, 80),
+            Direction.EAST: pygame.Rect(current_room.width - 20, current_room.height // 2 - 40, 20, 80)
         }
         
         # Check collisions with door areas
@@ -436,29 +464,24 @@ class Game:
             if (current_room.doors[direction] and 
                 player_rect.colliderect(door_area)):
                 self._transition_room(direction)
-                return  # Exit after first transition
+                return
     
     def _find_safe_position(self, room: Room, base_x: int, base_y: int) -> Tuple[int, int]:
         """Find a safe position near the given coordinates that doesn't collide with walls."""
-        # Try positions in an expanding square pattern
-        for offset in range(0, 200, 20):  # Try up to 200 pixels away in 20px steps
+        for offset in range(0, 200, 20):
             for dx in [-offset, offset]:
                 for dy in [-offset, offset]:
                     test_x = base_x + dx
                     test_y = base_y + dy
                     
-                    # Create test rectangle for player position
                     test_rect = pygame.Rect(test_x, test_y, 32, 32)
                     
-                    # Check if position is clear of walls
                     if not any(test_rect.colliderect(wall) for wall in room.walls):
-                        # Also check if position is within room bounds
-                        if (20 < test_x < self.width - 52 and 
-                            20 < test_y < self.height - 52):
+                        if (20 < test_x < room.width - 52 and 
+                            20 < test_y < room.height - 52):
                             return test_x, test_y
                             
-        # If no safe position found, return center of room as last resort
-        return self.width // 2, self.height // 2
+        return room.width // 2, room.height // 2
 
     def _transition_room(self, direction: Direction):
         new_pos = (
@@ -467,26 +490,24 @@ class Game:
         )
         
         if new_pos in self.dungeon.rooms:
-            # Update current room
             self.dungeon.current_room_pos = new_pos
             new_room = self.dungeon.rooms[new_pos]
             new_room.explored = True
             
-            # Calculate initial desired position
+            # Calculate spawn position based on room size
             if direction == Direction.NORTH:
-                base_x = self.width // 2
-                base_y = self.height - 100
+                base_x = new_room.width // 2
+                base_y = new_room.height - 100
             elif direction == Direction.SOUTH:
-                base_x = self.width // 2
+                base_x = new_room.width // 2
                 base_y = 100
             elif direction == Direction.WEST:
-                base_x = self.width - 100
-                base_y = self.height // 2
+                base_x = new_room.width - 100
+                base_y = new_room.height // 2
             else:  # EAST
                 base_x = 100
-                base_y = self.height // 2
+                base_y = new_room.height // 2
             
-            # Find safe position near the desired spawn point
             safe_x, safe_y = self._find_safe_position(new_room, base_x, base_y)
             self.player.x = safe_x
             self.player.y = safe_y
@@ -538,82 +559,104 @@ class Game:
         
         current_room = self.dungeon.rooms[self.dungeon.current_room_pos]
         
-        # Draw walls
+        # Update camera to follow player
+        self.camera.update(self.player.x, self.player.y, current_room.width, current_room.height)
+        
+        # Draw walls with camera offset
         for wall in current_room.walls:
-            pygame.draw.rect(self.screen, (128, 128, 128), wall)
+            # Create a copy of the wall rect with camera offset
+            cam_wall = pygame.Rect(
+                wall.x - self.camera.x,
+                wall.y - self.camera.y,
+                wall.width,
+                wall.height
+            )
+            pygame.draw.rect(self.screen, (128, 128, 128), cam_wall)
         
         # Draw ability effects
         for ability_name, ability in self.player.abilities.items():
             if ability.should_show_effect():
                 if ability_name == "aoe":
-                    # Draw circle AOE
+                    # Draw circle AOE with camera offset
+                    player_screen_pos = self.camera.apply(self.player.x, self.player.y)
                     pygame.draw.circle(self.screen, (255, 255, 0, 128),
-                                     (int(self.player.x), int(self.player.y)),
-                                     ability.range, 2)
+                                    (int(player_screen_pos[0]), int(player_screen_pos[1])),
+                                    ability.range, 2)
                     
                 elif ability_name == "cone":
-                    # Draw cone AOE
+                    # Draw cone AOE with camera offset
                     points = []
                     cone_angle = pi / 2  # 90 degrees
                     start_angle = self.player.direction - cone_angle / 2
                     end_angle = self.player.direction + cone_angle / 2
                     
-                    # Start from player position
-                    points.append((self.player.x, self.player.y))
+                    # Get player screen position
+                    player_screen_pos = self.camera.apply(self.player.x, self.player.y)
+                    points.append(player_screen_pos)
                     
                     # Add points along the arc
-                    for i in range(21):  # More points = smoother arc
+                    for i in range(21):
                         angle = start_angle + (i / 20) * cone_angle
-                        x = self.player.x + cos(angle) * ability.range
-                        y = self.player.y + sin(angle) * ability.range
-                        points.append((x, y))
+                        world_x = self.player.x + cos(angle) * ability.range
+                        world_y = self.player.y + sin(angle) * ability.range
+                        screen_x, screen_y = self.camera.apply(world_x, world_y)
+                        points.append((screen_x, screen_y))
                     
                     # Close the shape
-                    points.append((self.player.x, self.player.y))
+                    points.append(player_screen_pos)
                     
                     # Draw cone
-                    pygame.draw.polygon(self.screen, (255, 165, 0, 128),
-                                      points, 2)
+                    pygame.draw.polygon(self.screen, (255, 165, 0, 128), points, 2)
                     
                 elif ability_name == "projectile":
-                    # Draw projectile trajectory line
-                    end_x = self.player.x + cos(self.player.direction) * ability.range
-                    end_y = self.player.y + sin(self.player.direction) * ability.range
+                    # Draw projectile trajectory line with camera offset
+                    player_screen_pos = self.camera.apply(self.player.x, self.player.y)
+                    world_end_x = self.player.x + cos(self.player.direction) * ability.range
+                    world_end_y = self.player.y + sin(self.player.direction) * ability.range
+                    end_screen_x, end_screen_y = self.camera.apply(world_end_x, world_end_y)
+                    
                     pygame.draw.line(self.screen, (255, 255, 0, 128),
-                                   (self.player.x, self.player.y),
-                                   (end_x, end_y), 2)
+                                player_screen_pos,
+                                (end_screen_x, end_screen_y), 2)
         
-        # Draw projectiles
+        # Draw projectiles with camera offset
         for projectile in self.player.projectiles:
+            proj_screen_x, proj_screen_y = self.camera.apply(projectile.x, projectile.y)
             pygame.draw.circle(self.screen, (255, 255, 0), 
-                             (int(projectile.x), int(projectile.y)), 5)
+                            (int(proj_screen_x), int(proj_screen_y)), 5)
             
-        # Draw enemies
+        # Draw enemies with camera offset
         for enemy in current_room.enemies:
+            enemy_screen_x, enemy_screen_y = self.camera.apply(enemy.x, enemy.y)
             color = (255, 0, 0) if enemy.health > enemy.max_health / 2 else (200, 0, 0)
             pygame.draw.rect(self.screen, color,
-                           pygame.Rect(enemy.x - enemy.size/2, 
-                                     enemy.y - enemy.size/2,
-                                     enemy.size, enemy.size))
+                        pygame.Rect(enemy_screen_x - enemy.size/2, 
+                                    enemy_screen_y - enemy.size/2,
+                                    enemy.size, enemy.size))
             # Draw enemy health bar
             health_width = (enemy.health / enemy.max_health) * enemy.size
             pygame.draw.rect(self.screen, (0, 255, 0),
-                           pygame.Rect(enemy.x - enemy.size/2,
-                                     enemy.y - enemy.size/2 - 10,
-                                     health_width, 5))
+                        pygame.Rect(enemy_screen_x - enemy.size/2,
+                                    enemy_screen_y - enemy.size/2 - 10,
+                                    health_width, 5))
         
-        # Draw player
+        # Draw player with camera offset
+        player_screen_x, player_screen_y = self.camera.apply(self.player.x, self.player.y)
         pygame.draw.rect(self.screen, (0, 255, 0),
-                        pygame.Rect(self.player.x - self.player.size/2,
-                                  self.player.y - self.player.size/2,
-                                  self.player.size, self.player.size))
-        # Draw player direction indicator
-        end_x = self.player.x + cos(self.player.direction) * 20
-        end_y = self.player.y + sin(self.player.direction) * 20
-        pygame.draw.line(self.screen, (0, 255, 0),
-                        (self.player.x, self.player.y),
-                        (end_x, end_y), 2)
+                        pygame.Rect(player_screen_x - self.player.size/2,
+                                player_screen_y - self.player.size/2,
+                                self.player.size, self.player.size))
         
+        # Draw player direction indicator
+        end_world_x = self.player.x + cos(self.player.direction) * 20
+        end_world_y = self.player.y + sin(self.player.direction) * 20
+        end_screen_x, end_screen_y = self.camera.apply(end_world_x, end_world_y)
+        
+        pygame.draw.line(self.screen, (0, 255, 0),
+                        (player_screen_x, player_screen_y),
+                        (end_screen_x, end_screen_y), 2)
+        
+        # UI elements (not affected by camera)
         # Draw player health bar
         health_width = (self.player.health / 100) * 200
         pygame.draw.rect(self.screen, (0, 255, 0),
@@ -627,14 +670,13 @@ class Game:
             else:
                 color = (255, 0, 0)
             pygame.draw.rect(self.screen, color,
-                           pygame.Rect(10, y, 20, 20))
+                        pygame.Rect(10, y, 20, 20))
             y += 30
         
-        # Draw minimap
+        # Draw minimap (not affected by camera)
         self.minimap.draw(self.screen)
         
         pygame.display.flip()
-
     
     def run(self):
         while self.running:
