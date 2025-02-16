@@ -140,8 +140,45 @@ class Player:
         # Remove inactive projectiles
         self.projectiles = [p for p in self.projectiles if p.active]
 
+class PowerUpType(Enum):
+    HEALTH = "health"
+    DAMAGE = "damage"
+    SPEED = "speed"
+    COOLDOWN = "cooldown"
+
+class PowerUp:
+    def __init__(self, x: int, y: int, power_up_type: PowerUpType):
+        self.x = x
+        self.y = y
+        self.type = power_up_type
+        self.size = 20
+        self.collected = False
+        self.pulse_time = 0
+        self.pulse_speed = 2
+        
+    def update(self):
+        # Create a pulsing effect
+        self.pulse_time += 0.05
+        
+    def get_display_size(self) -> float:
+        return self.size + sin(self.pulse_time * self.pulse_speed) * 4
+        
+    def apply_effect(self, player: Player):
+        if self.type == PowerUpType.HEALTH:
+            player.health = min(player.health + 50, 200)  # change '200' to MAX_HEALTH
+        elif self.type == PowerUpType.DAMAGE:
+            # Increase all ability damages by 5
+            for ability in player.abilities.values():
+                ability.damage += 5
+        elif self.type == PowerUpType.SPEED:
+            player.speed += 1
+        elif self.type == PowerUpType.COOLDOWN:
+            # Reduce all ability cooldowns by 10%
+            for ability in player.abilities.values():
+                ability.cooldown *= 0.9
+
 class Enemy:
-    def __init__(self, x: int, y: int):
+    def __init__(self, x: int, y: int, is_boss: bool = False):
         self.x = x
         self.y = y
         self.health = 50
@@ -151,6 +188,7 @@ class Enemy:
         self.size = 24
         self.attack_cooldown = 1.0
         self.last_attack = 0
+        self.is_boss = is_boss
         
     def take_damage(self, amount: int):
         self.health -= amount
@@ -233,18 +271,21 @@ class Room:
             Direction.WEST: False
         }
         self.explored = False
+        self.power_ups: List[PowerUp] = []
+        self.boss_defeated = False
         self.generate_layout()
         self.spawn_enemies()
         
     def spawn_enemies(self):
         if self.room_type == RoomType.BOSS:
             # Spawn boss (stronger enemy)
-            boss = Enemy(self.width // 2, self.height // 2)
+            boss = Enemy(self.width // 2, self.height // 2, is_boss=True)
             boss.health = 200
             boss.max_health = 200
             boss.damage = 15
             boss.size = 48
             self.enemies = [boss]
+            print(f"Spawned boss: {boss.is_boss}")  # Debug print
         elif self.room_type == RoomType.NORMAL:
             # Spawn 2-4 regular enemies
             num_enemies = random.randint(2, 4)
@@ -309,11 +350,31 @@ class Room:
                 self.walls.append(pygame.Rect(x, y, obstacle_width, obstacle_height))
 
 class DungeonMap:
-    def __init__(self, size: int = 5):
+    def __init__(self, size: int = 5, num_floors: int = 3):
         self.size = size
         self.rooms: Dict[Tuple[int, int], Room] = {}
         self.current_room_pos = (0, 0)
+        self.current_floor = 1
+        self.num_floors = num_floors
+        self.floor_completed = False
         self.generate_dungeon()
+
+    def is_floor_complete(self) -> bool:
+        # Check if all enemies on the current floor are defeated
+        for room in self.rooms.values():
+            if room.enemies:
+                return False
+        return True
+        
+    def spawn_staircase(self):
+        # Find boss room and spawn staircase
+        for pos, room in self.rooms.items():
+            if room.room_type == RoomType.BOSS and room.boss_defeated:
+                # Create a special door/staircase in the boss room
+                self.floor_completed = True
+                print(f"Staircase spawned at position {pos}")
+                return pos
+        return None
         
     def generate_dungeon(self):
         # Start with a room at (0,0)
@@ -369,6 +430,7 @@ class Minimap:
         
     def draw(self, screen: pygame.Surface):
         self.surface.fill((0, 0, 0))
+        self.surface.set_alpha(128)
         
         # Draw each explored room
         for pos, room in self.dungeon_map.rooms.items():
@@ -540,6 +602,76 @@ class Game:
         
         # Room transitions
         self._check_room_transition()
+
+    def _check_boss_defeat(self):
+        current_room = self.dungeon.rooms[self.dungeon.current_room_pos]
+        
+        # Check if this room had a boss that was defeated
+        if current_room.room_type == RoomType.BOSS and not current_room.boss_defeated:
+            current_room.boss_defeated = True
+            print("Boss defeated! Spawning power-up")
+            
+            # Spawn a power-up
+            power_up_type = random.choice(list(PowerUpType))
+            power_up = PowerUp(current_room.width // 2, current_room.height // 2, power_up_type)
+            current_room.power_ups.append(power_up)
+            
+            # Check if the floor is complete
+            if self.dungeon.is_floor_complete():
+                print("Floor complete! Spawning staircase")
+                self.dungeon.spawn_staircase()
+
+    def _check_powerup_collection(self):
+        current_room = self.dungeon.rooms[self.dungeon.current_room_pos]
+        player_rect = pygame.Rect(self.player.x - self.player.size/2, 
+                                self.player.y - self.player.size/2,
+                                self.player.size, self.player.size)
+                                
+        for power_up in current_room.power_ups[:]:
+            if not power_up.collected:
+                power_up_rect = pygame.Rect(power_up.x - power_up.size/2,
+                                        power_up.y - power_up.size/2,
+                                        power_up.size, power_up.size)
+                if player_rect.colliderect(power_up_rect):
+                    power_up.apply_effect(self.player)
+                    power_up.collected = True
+                    current_room.power_ups.remove(power_up)
+
+    def _check_staircase(self):
+        if self.dungeon.floor_completed:
+            current_room = self.dungeon.rooms[self.dungeon.current_room_pos]
+            if current_room.room_type == RoomType.BOSS and current_room.boss_defeated:
+                player_rect = pygame.Rect(self.player.x - self.player.size/2,
+                                        self.player.y - self.player.size/2,
+                                        self.player.size, self.player.size)
+                
+                # Define staircase area at center of boss room
+                staircase_rect = pygame.Rect(current_room.width // 2 - 40,
+                                        current_room.height // 2 - 40,
+                                        80, 80)
+                
+                if player_rect.colliderect(staircase_rect):
+                    self._advance_to_next_floor()
+
+    def _advance_to_next_floor(self):
+        self.dungeon.current_floor += 1
+        if self.dungeon.current_floor > self.dungeon.num_floors:
+            # Player has completed all floors - handle victory
+            self.running = False
+            print("Congratulations! You've completed all floors!")
+        else:
+            # Generate new floor
+            self.dungeon = DungeonMap(size=8, num_floors=self.dungeon.num_floors)
+            self.dungeon.current_floor = self.dungeon.current_floor
+            self.minimap = Minimap(self.dungeon)
+            
+            # Reset player position but keep upgrades
+            self.player.x = self.width // 2
+            self.player.y = self.height // 2
+            self.player.health = min(self.player.health + 50, 200)  # Heal player between floors
+            
+            # Mark starting room as explored
+            self.dungeon.rooms[self.dungeon.current_room_pos].explored = True
     
     def update(self):
         current_room = self.dungeon.rooms[self.dungeon.current_room_pos]
@@ -552,7 +684,19 @@ class Game:
             enemy.move_toward_player(self.player, current_room.walls)
             enemy.attack_player(self.player)
             if enemy.is_dead():
+                if enemy.is_boss:
+                    self._check_boss_defeat()  # Handle boss defeat
                 current_room.enemies.remove(enemy)
+        
+        # Update power-ups
+        for power_up in current_room.power_ups:
+            power_up.update()
+        
+        # Check for power-up collection
+        self._check_powerup_collection()
+        
+        # Check for staircase/next floor
+        self._check_staircase()
 
     def draw(self):
         self.screen.fill((0, 0, 0))
@@ -639,6 +783,37 @@ class Game:
                         pygame.Rect(enemy_screen_x - enemy.size/2,
                                     enemy_screen_y - enemy.size/2 - 10,
                                     health_width, 5))
+        # After drawing enemies and before drawing player...
+
+        # Draw power-ups
+        for power_up in current_room.power_ups:
+            power_up_size = power_up.get_display_size()
+            power_up_screen_x, power_up_screen_y = self.camera.apply(power_up.x, power_up.y)
+            
+            # Different colors for different power-ups
+            if power_up.type == PowerUpType.HEALTH:
+                color = (255, 0, 255)  # Magenta for health
+            elif power_up.type == PowerUpType.DAMAGE:
+                color = (255, 0, 0)    # Red for damage
+            elif power_up.type == PowerUpType.SPEED:
+                color = (0, 255, 255)  # Cyan for speed
+            elif power_up.type == PowerUpType.COOLDOWN:
+                color = (255, 255, 0)  # Yellow for cooldown
+            
+            pygame.draw.circle(self.screen, color,
+                            (int(power_up_screen_x), int(power_up_screen_y)),
+                            int(power_up_size))
+
+        # Draw staircase if floor is complete
+        if self.dungeon.floor_completed:
+            for pos, room in self.dungeon.rooms.items():
+                if room.room_type == RoomType.BOSS and room.boss_defeated:
+                    if pos == self.dungeon.current_room_pos:
+                        stair_x, stair_y = self.camera.apply(room.width // 2, room.height // 2)
+                        # Draw staircase as a special rectangle
+                        stair_rect = pygame.Rect(stair_x - 40, stair_y - 40, 80, 80)
+                        pygame.draw.rect(self.screen, (0, 200, 200), stair_rect)
+                        pygame.draw.rect(self.screen, (0, 255, 255), stair_rect, 3)
         
         # Draw player with camera offset
         player_screen_x, player_screen_y = self.camera.apply(self.player.x, self.player.y)
@@ -661,6 +836,12 @@ class Game:
         health_width = (self.player.health / 100) * 200
         pygame.draw.rect(self.screen, (0, 255, 0),
                         pygame.Rect(10, 10, health_width, 20))
+
+        # Draw floor indicator
+        font = pygame.font.SysFont(None, 36)
+        floor_text = f"Floor: {self.dungeon.current_floor}/{self.dungeon.num_floors}"
+        text_surface = font.render(floor_text, True, (255, 255, 255))
+        self.screen.blit(text_surface, (self.width - 150, 10))
         
         # Draw ability cooldowns
         y = 40
