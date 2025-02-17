@@ -46,6 +46,13 @@ class Projectile:
         if self.distance_traveled >= self.range:
             self.active = False
 
+class PlayerState:
+    IDLE = 0
+    WALKING = 1
+    SLASHING = 2
+    SLAMMING = 3
+    SHOOTING = 4
+
 class Player:  
     def __init__(self, x: int, y: int):
         self.x = x
@@ -72,6 +79,8 @@ class Player:
         self.frame_index = 0
         self.animation_speed = 0.1
         self.animation_timer = 0
+        self.state = PlayerState.IDLE
+        self.attack_timer = 0
         
         # Define abilities
         self.abilities = {
@@ -91,7 +100,11 @@ class Player:
             'idle_down': [],
             'idle_up': [],
             'idle_left': [],
-            'idle_right': []
+            'idle_right': [],
+            'atk_up': [],
+            'atk_left': [],
+            'atk_right': [],
+            'atk_down': []
         }
         
         # Extract frames from spritesheet
@@ -105,6 +118,14 @@ class Player:
             flipped_frame = pygame.transform.flip(frame, True, False)
             animations['walk_right'].append(frame)
             animations['walk_left'].append(flipped_frame)
+        for col in range(3):
+            # attack animations
+            animations['atk_down'].append(self._get_frame(col, 6))
+            frame = self._get_frame(col, 7)
+            animations['atk_right'].append(frame)
+            flipped_frame = pygame.transform.flip(frame, True, False)
+            animations['atk_left'].append(flipped_frame)
+            animations['atk_up'].append(self._get_frame(col, 8))
             
         # Set idle animations (just use first frame of each direction)
         animations['idle_down'] = [animations['walk_down'][0]]
@@ -126,11 +147,27 @@ class Player:
         return pygame.transform.scale(frame, (self.size, self.size))
         
     def update_animation(self, dt):
+        # Update attack state
+        if self.state in [PlayerState.SLASHING, PlayerState.SLAMMING, PlayerState.SHOOTING]:
+            self.attack_timer += dt
+            if self.attack_timer > 0.3:  # Duration for attack animation
+                # Revert to idle state
+                if 'atk_up' in self.current_animation:
+                    self.current_animation = 'idle_up'
+                elif 'atk_down' in self.current_animation:
+                    self.current_animation = 'idle_down'
+                elif 'atk_left' in self.current_animation:
+                    self.current_animation = 'idle_left'
+                elif 'atk_right' in self.current_animation:
+                    self.current_animation = 'idle_right'
+                self.state = PlayerState.IDLE
+                self.attack_timer = 0
+        
         self.animation_timer += dt
         if self.animation_timer >= self.animation_speed:
             self.animation_timer = 0
             self.frame_index = (self.frame_index + 1) % len(self.animations[self.current_animation])
-    
+
     def get_current_frame(self):
         frames = self.animations[self.current_animation]
         # Use modulo with the actual length of the current animation
@@ -161,6 +198,28 @@ class Player:
         ability = self.abilities[ability_name]
         if not ability.is_ready():
             return
+
+         # Set attack animation based on current direction
+        if 'idle_up' in self.current_animation:
+            self.current_animation = 'atk_up'
+        elif 'idle_down' in self.current_animation:
+            self.current_animation = 'atk_down'
+        elif 'idle_left' in self.current_animation:
+            self.current_animation = 'atk_left'
+        elif 'idle_right' in self.current_animation:
+            self.current_animation = 'atk_right'
+        elif 'walk_up' in self.current_animation:
+            self.current_animation = 'atk_up'
+        elif 'walk_down' in self.current_animation:
+            self.current_animation = 'atk_down'
+        elif 'walk_left' in self.current_animation:
+            self.current_animation = 'atk_left'
+        elif 'walk_right' in self.current_animation:
+            self.current_animation = 'atk_right'
+            
+        self.frame_index = 0  # Reset frame index to start animation
+        self.state = PlayerState.SLASHING  # Set to appropriate state based on ability
+        self.attack_timer = 0
             
         if ability_name == "aoe":
             # Circle of Damage
