@@ -282,7 +282,7 @@ class Room:
         self.grid_x = x
         self.grid_y = y
         self.room_type = room_type
-        self.width = 1600
+        self.width = 1200
         self.height = 1200
         self.walls: List[pygame.Rect] = []
         self.enemies: List[Enemy] = []
