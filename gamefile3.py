@@ -53,11 +53,25 @@ class Player:
         self.health = 200
         self.speed = 5
         self.direction = 0
-        self.sprite = None
-        self.size = 24
-
-        # add multishot flag
+        self.size = 32
         self.has_multi_shot = False
+        
+        # Load spritesheet
+        # row1-3=idle, row4=running
+        # row5=running right, row6=running back
+        # row7=fwd attack, row8=right atk, 9=back atk
+        self.spritesheet = pygame.image.load("sprites/characters/player.png").convert_alpha()
+        self.frame_width = 16  # Looks like 16x16 tiles based on your image
+        self.frame_height = 20
+        self.sprite_offset_x = 16  # Horizontal offset if sprites don't start at left edge
+        self.sprite_offset_y = 20  # Vertical offset if sprites don't start at top edge
+        
+        # Animations
+        self.animations = self._load_animations()
+        self.current_animation = 'idle_down'
+        self.frame_index = 0
+        self.animation_speed = 0.1
+        self.animation_timer = 0
         
         # Define abilities
         self.abilities = {
@@ -67,6 +81,81 @@ class Player:
         }
         
         self.projectiles: List[Projectile] = []
+
+    def _load_animations(self):
+        animations = {
+            'walk_down': [],
+            'walk_up': [],
+            'walk_left': [],
+            'walk_right': [],
+            'idle_down': [],
+            'idle_up': [],
+            'idle_left': [],
+            'idle_right': []
+        }
+        
+        # Extract frames from spritesheet
+        for col in range(6):
+            # Row 0: Walking down
+            animations['walk_down'].append(self._get_frame(col, 3))
+            # Row 1: Walking up
+            animations['walk_up'].append(self._get_frame(col, 5))
+            # Row 3: Walking right
+            frame = self._get_frame(col, 4)
+            flipped_frame = pygame.transform.flip(frame, True, False)
+            animations['walk_right'].append(frame)
+            animations['walk_left'].append(flipped_frame)
+            
+        # Set idle animations (just use first frame of each direction)
+        animations['idle_down'] = [animations['walk_down'][0]]
+        animations['idle_up'] = [animations['walk_up'][0]]
+        animations['idle_left'] = [animations['walk_left'][0]]
+        animations['idle_right'] = [animations['walk_right'][0]]
+        
+        return animations
+    
+    def _get_frame(self, col, row):
+        # Adjust rect to include offsets
+        rect = pygame.Rect(
+            self.sprite_offset_x + 48 * col,  #col * self.frame_width,
+            self.sprite_offset_y + 48 * row,  # row * self.frame_height,
+            self.frame_width, self.frame_height
+        )
+        frame = pygame.Surface((self.frame_width, self.frame_height), pygame.SRCALPHA)
+        frame.blit(self.spritesheet, (0, 0), rect)
+        return pygame.transform.scale(frame, (self.size, self.size))
+        
+    def update_animation(self, dt):
+        self.animation_timer += dt
+        if self.animation_timer >= self.animation_speed:
+            self.animation_timer = 0
+            self.frame_index = (self.frame_index + 1) % len(self.animations[self.current_animation])
+    
+    def get_current_frame(self):
+        frames = self.animations[self.current_animation]
+        # Use modulo with the actual length of the current animation
+        valid_index = self.frame_index % len(frames)
+        return frames[valid_index]
+
+    def set_animation_based_on_movement(self, dx, dy):
+        if dx > 0:
+            self.current_animation = 'walk_right'
+        elif dx < 0:
+            self.current_animation = 'walk_left'
+        elif dy > 0:
+            self.current_animation = 'walk_down'
+        elif dy < 0:
+            self.current_animation = 'walk_up'
+        else:
+            # Convert from walk to idle
+            if self.current_animation == 'walk_right':
+                self.current_animation = 'idle_right'
+            elif self.current_animation == 'walk_left':
+                self.current_animation = 'idle_left'
+            elif self.current_animation == 'walk_down':
+                self.current_animation = 'idle_down'
+            elif self.current_animation == 'walk_up':
+                self.current_animation = 'idle_up'
         
     def use_ability(self, ability_name: str, enemies: List['Enemy']) -> None:
         ability = self.abilities[ability_name]
@@ -126,11 +215,14 @@ class Player:
     def move(self, dx: int, dy: int, walls: List[pygame.Rect]):
         new_x = self.x + dx * self.speed
         new_y = self.y + dy * self.speed
-        player_rect = pygame.Rect(new_x, new_y, self.size, self.size)
+        player_rect = pygame.Rect(new_x - self.size/2, new_y - self.size/2, self.size, self.size)
         
         if not any(player_rect.colliderect(wall) for wall in walls):
             self.x = new_x
             self.y = new_y
+            
+        # Update animation based on movement
+        self.set_animation_based_on_movement(dx, dy)
             
         # Update direction based on movement
         if dx != 0 or dy != 0:
@@ -697,8 +789,13 @@ class Game:
             self.dungeon.rooms[self.dungeon.current_room_pos].explored = True
     
     def update(self):
+        # Calculate delta time
+        dt = self.clock.get_time() / 1000  # Convert milliseconds to seconds
+        
         current_room = self.dungeon.rooms[self.dungeon.current_room_pos]
         
+        # Update player animations
+        self.player.update_animation(dt)
         # Update projectiles
         self.player.update_projectiles(current_room.enemies, current_room.walls)
         
@@ -840,18 +937,20 @@ class Game:
                         pygame.draw.rect(self.screen, (0, 200, 200), stair_rect)
                         pygame.draw.rect(self.screen, (0, 255, 255), stair_rect, 3)
         
+        ## Replace this part in the draw method:
         # Draw player with camera offset
         player_screen_x, player_screen_y = self.camera.apply(self.player.x, self.player.y)
-        pygame.draw.rect(self.screen, (0, 255, 0),
-                        pygame.Rect(player_screen_x - self.player.size/2,
-                                player_screen_y - self.player.size/2,
-                                self.player.size, self.player.size))
-        
-        # Draw player direction indicator
+
+        # Get current frame
+        current_frame = self.player.get_current_frame()
+        frame_rect = current_frame.get_rect(center=(player_screen_x, player_screen_y))
+        self.screen.blit(current_frame, frame_rect)
+
+        # Direction indicator is still useful for abilities
         end_world_x = self.player.x + cos(self.player.direction) * 20
         end_world_y = self.player.y + sin(self.player.direction) * 20
         end_screen_x, end_screen_y = self.camera.apply(end_world_x, end_world_y)
-        
+                
         pygame.draw.line(self.screen, (0, 255, 0),
                         (player_screen_x, player_screen_y),
                         (end_screen_x, end_screen_y), 2)
