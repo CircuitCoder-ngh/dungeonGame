@@ -358,10 +358,89 @@ class Enemy:
         self.max_health = 50
         self.speed = 2
         self.damage = 5
-        self.size = 48 if is_boss else 24
+        self.size = 48 if is_boss else 32  # Changed to match tile size
         self.attack_cooldown = 1.0
         self.last_attack = 0
         self.is_boss = is_boss
+        self.sprite_offset_x = 8
+        self.sprite_offset_y = 8
+        
+        if not is_boss:
+            # Animation properties
+            self.spritesheet = pygame.image.load("sprites/characters/32x32/Char_006.png").convert_alpha()
+            self.frame_width = 32
+            self.frame_height = 32
+            self.animations = self._load_animations()
+            self.current_animation = 'walk_down'
+            self.frame_index = 0
+            self.animation_speed = 0.1
+            self.animation_timer = 0
+            self.direction = 0  # Current facing direction in radians
+        
+    def _load_animations(self):
+        animations = {
+            'walk_down': [],   # Row 0
+            'walk_left': [],   # Row 1
+            'walk_right': [],  # Row 2
+            'walk_up': []      # Row 3
+        }
+        
+        # Extract frames for each animation
+        for col in range(3):  # Assuming 3 frames per animation
+            # Row 0: Walking down
+            animations['walk_down'].append(self._get_frame(col, 0))
+            # Row 1: Walking left
+            animations['walk_left'].append(self._get_frame(col, 1))
+            # Row 2: Walking right
+            animations['walk_right'].append(self._get_frame(col, 2))
+            # Row 3: Walking up
+            animations['walk_up'].append(self._get_frame(col, 3))
+            
+        return animations
+    
+    def _get_frame(self, col: int, row: int) -> pygame.Surface:
+        rect = pygame.Rect(
+            self.sprite_offset_x + col * 48,
+            self.sprite_offset_y + row * 48,
+            self.frame_width,
+            self.frame_height
+        )
+        frame = pygame.Surface((self.frame_width, self.frame_height), pygame.SRCALPHA)
+        frame.blit(self.spritesheet, (0, 0), rect)
+        return pygame.transform.scale(frame, (self.size, self.size))
+    
+    def update_animation(self, dt: float):
+        if self.is_boss:
+            return
+            
+        self.animation_timer += dt
+        if self.animation_timer >= self.animation_speed:
+            self.animation_timer = 0
+            self.frame_index = (self.frame_index + 1) % len(self.animations[self.current_animation])
+    
+    def get_current_frame(self):
+        if self.is_boss:
+            return None
+            
+        return self.animations[self.current_animation][self.frame_index]
+    
+    def set_animation_based_on_movement(self, dx: float, dy: float):
+        if self.is_boss:
+            return
+            
+        # Determine which animation to use based on movement direction
+        if abs(dx) > abs(dy):
+            # Moving more horizontally than vertically
+            if dx > 0:
+                self.current_animation = 'walk_right'
+            else:
+                self.current_animation = 'walk_left'
+        else:
+            # Moving more vertically than horizontally
+            if dy > 0:
+                self.current_animation = 'walk_down'
+            else:
+                self.current_animation = 'walk_up'
         
     def take_damage(self, amount: int):
         self.health -= amount
@@ -386,6 +465,8 @@ class Enemy:
             if not any(enemy_rect.colliderect(wall) for wall in walls):
                 self.x = new_x
                 self.y = new_y
+                if not self.is_boss:
+                    self.set_animation_based_on_movement(dx, dy)
                 
     def attack_player(self, player: Player) -> bool:
         if time() - self.last_attack >= self.attack_cooldown:

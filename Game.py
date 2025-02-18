@@ -319,11 +319,17 @@ class Game:
         # Draw enemies with camera offset
         for enemy in current_room.enemies:
             enemy_screen_x, enemy_screen_y = self.camera.apply(enemy.x, enemy.y)
-            color = (255, 0, 0) if enemy.health > enemy.max_health / 2 else (200, 0, 0)
-            pygame.draw.rect(self.screen, color,
-                        pygame.Rect(enemy_screen_x - enemy.size/2, 
-                                    enemy_screen_y - enemy.size/2,
-                                    enemy.size, enemy.size))
+            if enemy.is_boss:
+                color = (255, 0, 0) if enemy.health > enemy.max_health / 2 else (200, 0, 0)
+                pygame.draw.rect(self.screen, color,
+                            pygame.Rect(enemy_screen_x - enemy.size/2, 
+                                        enemy_screen_y - enemy.size/2,
+                                        enemy.size, enemy.size))
+            else:
+                current_frame = enemy.get_current_frame()
+                frame_rect = current_frame.get_rect(center=(enemy_screen_x, enemy_screen_y))
+                self.screen.blit(current_frame, frame_rect)
+
             # Draw enemy health bar
             health_width = (enemy.health / enemy.max_health) * enemy.size
             pygame.draw.rect(self.screen, (0, 255, 0),
