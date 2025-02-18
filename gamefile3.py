@@ -358,7 +358,7 @@ class Enemy:
         self.max_health = 50
         self.speed = 2
         self.damage = 5
-        self.size = 24
+        self.size = 48 if is_boss else 24
         self.attack_cooldown = 1.0
         self.last_attack = 0
         self.is_boss = is_boss
@@ -449,25 +449,40 @@ class Room:
         self.generate_layout()
         self.spawn_enemies()
         
+    def _find_safe_enemy_position(self, size: int) -> Tuple[int, int]:
+        """Find a safe position that doesn't collide with walls for an enemy of given size."""
+        for _ in range(100):  # Try up to 100 times to find a safe position
+            x = random.randint(50, self.width - 50)
+            y = random.randint(50, self.height - 50)
+            
+            test_rect = pygame.Rect(x - size/2, y - size/2, size, size)
+            
+            if not any(test_rect.colliderect(wall) for wall in self.walls):
+                return x, y
+                
+        # If we couldn't find a position after 100 tries, use the center (should be safe)
+        return self.width // 2, self.height // 2
+
     def spawn_enemies(self):
         if self.room_type == RoomType.BOSS:
             # Spawn boss (stronger enemy)
-            boss = Enemy(self.width // 2, self.height // 2, is_boss=True)
+            boss_size = 48
+            x, y = self._find_safe_enemy_position(boss_size)
+            boss = Enemy(x, y, is_boss=True)
             boss.health = 200
             boss.max_health = 200
             boss.damage = 15
-            boss.size = 48
+            boss.size = boss_size
             self.enemies = [boss]
-            print(f"Spawned boss: {boss.is_boss}")  # Debug print
         elif self.room_type == RoomType.NORMAL:
             # Spawn 2-4 regular enemies
             num_enemies = random.randint(2, 4)
             self.enemies = []
             for _ in range(num_enemies):
-                x = random.randint(50, self.width - 50)
-                y = random.randint(50, self.height - 50)
+                enemy_size = 24  # Default enemy size
+                x, y = self._find_safe_enemy_position(enemy_size)
                 self.enemies.append(Enemy(x, y))
-
+                
     def generate_layout(self):
         # Clear existing walls
         self.walls = []
@@ -661,6 +676,35 @@ class Minimap:
                              y + self.cell_size//2 - door_size//2,
                              door_size, door_size)
 
+class FlashMessage:
+    def __init__(self, text: str, duration: float = 3.0):
+        self.text = text
+        self.duration = duration
+        self.start_time = time()
+        self.alpha = 255
+        self.font = pygame.font.SysFont(None, 72)
+    
+    def is_active(self) -> bool:
+        return time() - self.start_time < self.duration
+    
+    def get_alpha(self) -> int:
+        elapsed = time() - self.start_time
+        if elapsed < 0.5:  # Fade in
+            return int(255 * (elapsed / 0.5))
+        elif elapsed > self.duration - 0.5:  # Fade out
+            return int(255 * (1 - (elapsed - (self.duration - 0.5)) / 0.5))
+        else:
+            return 255
+    
+    def draw(self, screen: pygame.Surface):
+        if not self.is_active():
+            return
+        
+        text_surface = self.font.render(self.text, True, (255, 255, 0))
+        text_surface.set_alpha(self.get_alpha())
+        text_rect = text_surface.get_rect(center=(screen.get_width()//2, screen.get_height()//2))
+        screen.blit(text_surface, text_rect)
+
 class Game:
     def __init__(self):
         pygame.init()
@@ -669,8 +713,10 @@ class Game:
         self.screen = pygame.display.set_mode((self.width, self.height))
         self.clock = pygame.time.Clock()
         self.running = True
+
+        self.flash_message = None
         
-        self.dungeon = DungeonMap(size=8)  # Create 8 rooms
+        self.dungeon = DungeonMap(size=4)  # Create 8 rooms
         self.minimap = Minimap(self.dungeon)
         current_room = self.dungeon.rooms[self.dungeon.current_room_pos]
         safe_x, safe_y = self._find_safe_position(current_room, self.width // 2, self.height // 2)
@@ -789,11 +835,6 @@ class Game:
             # power_up_type = PowerUpType.MULTI_SHOT
             power_up = PowerUp(current_room.width // 2, current_room.height // 2, power_up_type)
             current_room.power_ups.append(power_up)
-            
-            # Check if the floor is complete
-            if self.dungeon.is_floor_complete():
-                print("Floor complete! Spawning staircase")
-                self.dungeon.spawn_staircase()
 
     def _check_powerup_collection(self):
         current_room = self.dungeon.rooms[self.dungeon.current_room_pos]
@@ -825,10 +866,13 @@ class Game:
                                         80, 80)
                 
                 if player_rect.colliderect(staircase_rect):
+                    print(f"Advancing from floor {self.dungeon.current_floor}")
                     self._advance_to_next_floor()
+                    print(f"Now on floor {self.dungeon.current_floor}")
 
     def _advance_to_next_floor(self):
         self.dungeon.current_floor += 1
+        current_floor = self.dungeon.current_floor
         if self.dungeon.current_floor > self.dungeon.num_floors:
             # Player has completed all floors - handle victory
             self.running = False
@@ -836,7 +880,7 @@ class Game:
         else:
             # Generate new floor
             self.dungeon = DungeonMap(size=8, num_floors=self.dungeon.num_floors)
-            self.dungeon.current_floor = self.dungeon.current_floor
+            self.dungeon.current_floor = current_floor
             self.minimap = Minimap(self.dungeon)
             
             # Reset player position but keep upgrades
@@ -866,6 +910,14 @@ class Game:
                 if enemy.is_boss:
                     self._check_boss_defeat()  # Handle boss defeat
                 current_room.enemies.remove(enemy)
+                # Check if all enemies are gone after each enemy death
+                if self.dungeon.is_floor_complete() and any(room.room_type == RoomType.BOSS and room.boss_defeated 
+                                                        for room in self.dungeon.rooms.values()):
+                    if not self.dungeon.floor_completed:
+                        self.dungeon.floor_completed = True
+                        print("Floor complete! Spawning staircase")
+                        self.dungeon.spawn_staircase()
+                        self.flash_message = FlashMessage("Level Cleared!")
         
         # Update power-ups
         for power_up in current_room.power_ups:
@@ -881,7 +933,7 @@ class Game:
         self.screen.fill((0, 0, 0))
         
         current_room = self.dungeon.rooms[self.dungeon.current_room_pos]
-        
+
         # Update camera to follow player
         self.camera.update(self.player.x, self.player.y, current_room.width, current_room.height)
         
@@ -996,7 +1048,6 @@ class Game:
                         pygame.draw.rect(self.screen, (0, 200, 200), stair_rect)
                         pygame.draw.rect(self.screen, (0, 255, 255), stair_rect, 3)
         
-        ## Replace this part in the draw method:
         # Draw player with camera offset
         player_screen_x, player_screen_y = self.camera.apply(self.player.x, self.player.y)
 
@@ -1039,6 +1090,10 @@ class Game:
         
         # Draw minimap (not affected by camera)
         self.minimap.draw(self.screen)
+
+        # Draw flash message if active
+        if self.flash_message and self.flash_message.is_active():
+            self.flash_message.draw(self.screen)
         
         pygame.display.flip()
     
