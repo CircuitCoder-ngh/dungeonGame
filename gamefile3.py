@@ -448,6 +448,55 @@ class Room:
         self.boss_defeated = False
         self.generate_layout()
         self.spawn_enemies()
+
+        # New attributes for floor tiles
+        self.floor_spritesheet = pygame.image.load("tiles/floor.png").convert_alpha()
+        self.floor_tile_size = 32
+        self.floor_tiles = self._load_floor_tiles()
+        self.floor_grid = self._generate_floor_grid()
+
+    def _load_floor_tiles(self):
+        tiles = []
+        sheet_width = self.floor_spritesheet.get_width()
+        sheet_height = self.floor_spritesheet.get_height()
+        
+        # Extract all 32x32 tiles from the spritesheet
+        for y in range(0, sheet_height, self.floor_tile_size):
+            for x in range(0, sheet_width, self.floor_tile_size):
+                rect = pygame.Rect(x, y, self.floor_tile_size, self.floor_tile_size)
+                tile = pygame.Surface((self.floor_tile_size, self.floor_tile_size), pygame.SRCALPHA)
+                tile.blit(self.floor_spritesheet, (0, 0), rect)
+                tiles.append(tile)
+        
+        return tiles
+
+    def _generate_floor_grid(self):
+        # Create a grid of tile indexes for the floor
+        grid = []
+        rows = self.height // self.floor_tile_size
+        cols = self.width // self.floor_tile_size
+        
+        # Choose floor tile patterns based on room type
+        if self.room_type == RoomType.START:
+            main_tile = 75  # Index of your starting room floor tile
+        elif self.room_type == RoomType.BOSS:
+            main_tile = 125  # Index of your boss room floor tile
+        elif self.room_type == RoomType.TREASURE:
+            main_tile = 175  # Index of your treasure room floor tile
+        else:
+            main_tile = 200  # Index of your normal room floor tile
+        
+        # Generate grid with occasional variety
+        for row in range(rows):
+            grid_row = []
+            for col in range(cols):
+                tile_idx = main_tile
+                # if random.random() < 0.1:  # 10% chance for a variation
+                #     tile_idx = random.choice([i for i in range(len(self.floor_tiles)) if i != main_tile])                    
+                grid_row.append(tile_idx)
+            grid.append(grid_row)
+        
+        return grid
         
     def _find_safe_enemy_position(self, size: int) -> Tuple[int, int]:
         """Find a safe position that doesn't collide with walls for an enemy of given size."""
@@ -937,6 +986,24 @@ class Game:
         # Update camera to follow player
         self.camera.update(self.player.x, self.player.y, current_room.width, current_room.height)
         
+        # Draw floor tiles
+        for row in range(len(current_room.floor_grid)):
+            for col in range(len(current_room.floor_grid[row])):
+                tile_idx = current_room.floor_grid[row][col]
+                tile = current_room.floor_tiles[tile_idx]
+                
+                # Calculate world position
+                world_x = col * current_room.floor_tile_size
+                world_y = row * current_room.floor_tile_size
+                
+                # Apply camera offset
+                screen_x, screen_y = self.camera.apply(world_x, world_y)
+                
+                # Only draw tiles that are in the camera view
+                if (-current_room.floor_tile_size <= screen_x <= self.width and
+                    -current_room.floor_tile_size <= screen_y <= self.height):
+                    self.screen.blit(tile, (screen_x, screen_y))
+
         # Draw walls with camera offset
         for wall in current_room.walls:
             # Create a copy of the wall rect with camera offset
