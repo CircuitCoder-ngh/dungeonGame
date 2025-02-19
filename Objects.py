@@ -26,7 +26,7 @@ class ActiveAbilityEffect:
     range: int
     duration: float
     start_time: float
-    hit_enemies: Set[int]  # Set of enemy IDs that have been hit
+    hit_enemies: Dict[int, float]  # Set of enemy IDs that have been hit
     
     def is_expired(self) -> bool:
         return time() - self.start_time >= self.duration
@@ -127,7 +127,7 @@ class Ability:
             range=self.range,
             duration=self.duration,
             start_time=time(),
-            hit_enemies=set()
+            hit_enemies=dict()
         )
 
     def update(self, dt: float):
@@ -203,7 +203,7 @@ class Player:
         
         # Define abilities
         self.abilities = {
-            "aoe": Ability("Circle of Damage", 10, 1.5, 150),
+            "aoe": Ability("Circle of Damage", 6, 1.5, 150),
             "cone": Ability("Forward Slash", 30, 1.5, 150),
             "projectile": Ability("Energy Bolt", 25, 2.0, 500)
         }
@@ -456,30 +456,34 @@ class Player:
 
     def update_ability_effects(self, enemies: List['Enemy'], dt: float):
         # Update existing effects and check for new collisions
+        current_time = time()
+        
         for effect in self.active_effects[:]:
             if effect.is_expired():
                 self.active_effects.remove(effect)
                 continue
                 
             for enemy in enemies:
-                if enemy.is_dead() or id(enemy) in effect.hit_enemies:
+                if enemy.is_dead():
                     continue
                     
-                # Check collision based on ability type
                 hit = False
+                enemy_id = id(enemy)
                 
                 if effect.ability_name == "Circle of Damage":
                     # Circle AOE check
-                    y_dist = min((enemy.y - self.y)**2, (enemy.y + enemy.size - self.y)**2)
-                    x_dist = min((enemy.x - self.x)**2, (enemy.x + enemy.size - self.x)**2)
-                    dist = sqrt(x_dist + y_dist)
-                    hit = dist <= effect.range
+                    dist = sqrt((enemy.x - self.x)**2 + (enemy.y - self.y)**2)
+                    if dist <= effect.range:
+                        # Check if enough time has passed since last damage
+                        last_damage_time = effect.hit_enemies.get(enemy_id, 0)
+                        if current_time - last_damage_time >= 0.1:  # Apply damage every 0.1 seconds
+                            enemy.take_damage(effect.damage)
+                            effect.hit_enemies[enemy_id] = current_time
+                            hit = True
                     
                 elif effect.ability_name == "Forward Slash":
-                    # Cone check
-                    y_dist = min((enemy.y - self.y)**2, (enemy.y + enemy.size - self.y)**2)
-                    x_dist = min((enemy.x - self.x)**2, (enemy.x + enemy.size - self.x)**2)
-                    dist = sqrt(x_dist + y_dist)
+                    # Cone check (single hit damage - unchanged)
+                    dist = sqrt((enemy.x - self.x)**2 + (enemy.y - self.y)**2)
                     if dist <= effect.range:
                         dx = enemy.x - self.x
                         dy = enemy.y - self.y
@@ -487,22 +491,21 @@ class Player:
                         angle_diff = abs(enemy_angle - self.direction)
                         while angle_diff > pi:
                             angle_diff -= 2 * pi
-                        hit = abs(angle_diff) <= pi/4  # 45-degree cone
-                        
+                        if abs(angle_diff) <= pi/4 and enemy_id not in effect.hit_enemies:  # 45-degree cone
+                            enemy.take_damage(effect.damage)
+                            effect.hit_enemies[enemy_id] = current_time
+                            hit = True
+                            
                 elif effect.ability_name == "Energy Bolt":
-                    # Projectile collision
+                    # Projectile collision (unchanged)
                     for projectile in self.projectiles:
                         proj_rect = pygame.Rect(projectile.x - 5, projectile.y - 5, 10, 10)
                         enemy_rect = pygame.Rect(enemy.x - enemy.size/2, 
-                                               enemy.y - enemy.size/2,
-                                               enemy.size, enemy.size)
+                                            enemy.y - enemy.size/2,
+                                            enemy.size, enemy.size)
                         if proj_rect.colliderect(enemy_rect):
                             hit = True
                             break
-                
-                if hit:
-                    enemy.take_damage(effect.damage)
-                    effect.hit_enemies.add(id(enemy))
 
 class PowerUpType(Enum):
     HEALTH = "health"
