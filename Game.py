@@ -30,10 +30,10 @@ class Game:
         
         # Define door areas for a larger room
         door_areas = {
-            Direction.NORTH: pygame.Rect(current_room.width // 2 - 40, 0, 80, 20),
-            Direction.SOUTH: pygame.Rect(current_room.width // 2 - 40, current_room.height - 20, 80, 20),
-            Direction.WEST: pygame.Rect(0, current_room.height // 2 - 40, 20, 80),
-            Direction.EAST: pygame.Rect(current_room.width - 20, current_room.height // 2 - 40, 20, 80)
+            Direction.NORTH: pygame.Rect(current_room.width // 2 - 40, 0, 80, 5),
+            Direction.SOUTH: pygame.Rect(current_room.width // 2 - 40, current_room.height - 5, 80, 5),
+            Direction.WEST: pygame.Rect(0, current_room.height // 2 - 40, 5, 80),
+            Direction.EAST: pygame.Rect(current_room.width - 5, current_room.height // 2 - 40, 5, 80)
         }
         
         # Check collisions with door areas
@@ -51,11 +51,12 @@ class Game:
                     test_x = base_x + dx
                     test_y = base_y + dy
                     
-                    test_rect = pygame.Rect(test_x, test_y, 32, 32)
+                    # slightly larger than 32x32 player, to give some margin for error
+                    test_rect = pygame.Rect(test_x, test_y, 48, 48)
                     
                     if not any(test_rect.colliderect(wall) for wall in room.walls):
-                        if (20 < test_x < room.width - 52 and 
-                            20 < test_y < room.height - 52):
+                        if (10 < test_x < room.width - 10 and 
+                            10 < test_y < room.height - 10):
                             return test_x, test_y
                             
         return room.width // 2, room.height // 2
@@ -74,15 +75,15 @@ class Game:
             # Calculate spawn position based on room size
             if direction == Direction.NORTH:
                 base_x = new_room.width // 2
-                base_y = new_room.height - 100
+                base_y = new_room.height - 24
             elif direction == Direction.SOUTH:
                 base_x = new_room.width // 2
-                base_y = 100
+                base_y = 24
             elif direction == Direction.WEST:
-                base_x = new_room.width - 100
+                base_x = new_room.width - 24
                 base_y = new_room.height // 2
             else:  # EAST
-                base_x = 100
+                base_x = 24
                 base_y = new_room.height // 2
             
             safe_x, safe_y = self._find_safe_position(new_room, base_x, base_y)
@@ -352,21 +353,8 @@ class Game:
         # Draw power-ups
         for power_up in current_room.power_ups:
             power_up_size = power_up.get_display_size()
-            power_up_screen_x, power_up_screen_y = self.camera.apply(power_up.x, power_up.y)
-            
-            # Different colors for different power-ups
-            if power_up.type == PowerUpType.HEALTH:
-                color = (255, 0, 255)  # Magenta for health
-            elif power_up.type == PowerUpType.DAMAGE:
-                color = (255, 0, 0)    # Red for damage
-            elif power_up.type == PowerUpType.SPEED:
-                color = (0, 255, 255)  # Cyan for speed
-            elif power_up.type == PowerUpType.COOLDOWN:
-                color = (255, 255, 0)  # Yellow for cooldown
-            else:
-                color = (255, 120, 0)
-            
-            pygame.draw.circle(self.screen, color,
+            power_up_screen_x, power_up_screen_y = self.camera.apply(power_up.x, power_up.y)        
+            pygame.draw.circle(self.screen, power_up.color,
                             (int(power_up_screen_x), int(power_up_screen_y)),
                             int(power_up_size))
 

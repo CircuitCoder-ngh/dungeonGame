@@ -1,5 +1,13 @@
 from Objects import *
 
+# diagonal move speed is too fast
+# UI: add floor timer
+# UI: add enemy count
+# add more powerups
+# add gold drops for buying health/armor between floors
+# add exp points,
+
+
 class Direction(Enum):
     NORTH = (0, -1)
     SOUTH = (0, 1)
@@ -82,13 +90,13 @@ class Room:
         
         # Choose floor tile patterns based on room type
         if self.room_type == RoomType.START:
-            main_tile = 75  # Index of your starting room floor tile
+            main_tile = random.randint(10,500)  # Index of your starting room floor tile
         elif self.room_type == RoomType.BOSS:
-            main_tile = 125  # Index of your boss room floor tile
+            main_tile = random.randint(10,500)  # Index of your boss room floor tile
         elif self.room_type == RoomType.TREASURE:
-            main_tile = 175  # Index of your treasure room floor tile
+            main_tile = random.randint(10,500)  # Index of your treasure room floor tile
         else:
-            main_tile = 200  # Index of your normal room floor tile
+            main_tile = random.randint(10,500)  # Index of your normal room floor tile
         
         # Generate grid with occasional variety
         for row in range(rows):

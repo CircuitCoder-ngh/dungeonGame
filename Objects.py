@@ -205,7 +205,7 @@ class Player:
         self.abilities = {
             "aoe": Ability("Circle of Damage", 6, 1.5, 150),
             "cone": Ability("Forward Slash", 30, 1.5, 150),
-            "projectile": Ability("Energy Bolt", 25, 2.0, 500)
+            "projectile": Ability("Energy Bolt", 25, 0.05, 500)
         }
         
         self.projectiles: List[Projectile] = []
@@ -510,7 +510,7 @@ class Player:
 class PowerUpType(Enum):
     HEALTH = "health"
     DAMAGE = "damage"
-    SPEED = "speed"
+    SPEED = "speed"  # replace with DASH
     COOLDOWN = "cooldown"
     MULTI_SHOT = "multi_shot"
 
@@ -523,6 +523,18 @@ class PowerUp:
         self.collected = False
         self.pulse_time = 0
         self.pulse_speed = 2
+
+        # set color based on type (to be replaced w/ sprites)
+        if power_up_type == PowerUpType.HEALTH:
+            self.color = (255, 0, 255)  # Magenta for health
+        elif power_up_type == PowerUpType.DAMAGE:
+            self.color = (255, 0, 0)    # Red for damage
+        elif power_up_type == PowerUpType.SPEED:
+            self.color = (0, 255, 255)  # Cyan for speed
+        elif power_up_type == PowerUpType.COOLDOWN:
+            self.color = (255, 255, 0)  # Yellow for cooldown
+        else:
+            self.color = (255, 120, 0)
         
     def update(self):
         # Create a pulsing effect
