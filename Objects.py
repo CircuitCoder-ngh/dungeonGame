@@ -395,14 +395,36 @@ class Player:
         # ability.use()
 
     def move(self, dx: int, dy: int, walls: List[pygame.Rect]):
+        # Calculate new position with diagonal movement
         new_x = self.x + dx * self.speed
         new_y = self.y + dy * self.speed
         player_rect = pygame.Rect(new_x - self.size/2, new_y - self.size/2, self.size, self.size)
         
+        # Try diagonal movement first
         if not any(player_rect.colliderect(wall) for wall in walls):
             self.x = new_x
             self.y = new_y
-            
+        else:
+            # If diagonal movement fails, try horizontal movement
+            horizontal_rect = pygame.Rect(
+                new_x - self.size/2, 
+                self.y - self.size/2,  # Keep original y
+                self.size, 
+                self.size
+            )
+            if dx != 0 and not any(horizontal_rect.colliderect(wall) for wall in walls):
+                self.x = new_x
+                
+            # Try vertical movement
+            vertical_rect = pygame.Rect(
+                self.x - self.size/2,  # Keep original x
+                new_y - self.size/2, 
+                self.size, 
+                self.size
+            )
+            if dy != 0 and not any(vertical_rect.colliderect(wall) for wall in walls):
+                self.y = new_y
+                
         # Update animation based on movement
         self.set_animation_based_on_movement(dx, dy)
             
