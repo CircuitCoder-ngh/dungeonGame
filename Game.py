@@ -1,4 +1,5 @@
 from Dungeon import *
+from Objects import *
 
 class Game:
     def __init__(self):
@@ -197,9 +198,16 @@ class Game:
         
         # Update player animations
         self.player.update_animation(dt)
+
+        # Update abilities 
+        self.player.update_ability_effects(current_room.enemies, dt)
+
+        for ability in self.player.abilities.values():
+            ability.update(dt)
+
         # Update projectiles
         self.player.update_projectiles(current_room.enemies, current_room.walls)
-        
+
         # Update enemies
         for enemy in current_room.enemies[:]:
             enemy.move_toward_player(self.player, current_room.walls)
@@ -268,12 +276,15 @@ class Game:
         for ability_name, ability in self.player.abilities.items():
             if ability.should_show_effect():
                 if ability_name == "aoe":
-                    # Draw circle AOE with camera offset
-                    player_screen_pos = self.camera.apply(self.player.x, self.player.y)
-                    pygame.draw.circle(self.screen, (255, 255, 0, 128),
+                    current_frame = ability.get_current_frame()
+                    if current_frame:
+                        player_screen_pos = self.camera.apply(self.player.x, self.player.y)
+                        frame_rect = current_frame.get_rect(center=player_screen_pos)
+                        self.screen.blit(current_frame, frame_rect)
+                        pygame.draw.circle(self.screen, (255, 255, 0, 64),
                                     (int(player_screen_pos[0]), int(player_screen_pos[1])),
                                     ability.range, 2)
-                    
+                            
                 elif ability_name == "cone":
                     # Draw cone AOE with camera offset
                     points = []
