@@ -1,6 +1,5 @@
 from Objects import *
 
-# diagonal move speed is too fast
 # UI: add floor timer
 # UI: add enemy count
 # add more powerups
@@ -60,6 +59,7 @@ class Room:
         self.boss_defeated = False
         self.generate_layout()
         self.spawn_enemies()
+        self.total_enemies = len(self.enemies)  # Store initial enemy count
 
         # New attributes for floor tiles
         self.floor_spritesheet = pygame.image.load("tiles/floor.png").convert_alpha()
@@ -192,10 +192,10 @@ class Room:
         if self.room_type not in [RoomType.BOSS, RoomType.TREASURE]:
             num_obstacles = 15  # More obstacles for larger rooms
             for _ in range(num_obstacles):
-                x = random.randint(wall_thickness + 50, self.width - wall_thickness - 100)
-                y = random.randint(wall_thickness + 50, self.height - wall_thickness - 100)
                 obstacle_width = random.randint(30, 80)
                 obstacle_height = random.randint(30, 80)
+                x = random.randint(wall_thickness + 50, self.width - wall_thickness - 50 - obstacle_width)
+                y = random.randint(wall_thickness + 50, self.height - wall_thickness - 50 - obstacle_height) 
                 self.walls.append(pygame.Rect(x, y, obstacle_width, obstacle_height))
 
 class DungeonMap:
@@ -214,6 +214,12 @@ class DungeonMap:
             if room.enemies:
                 return False
         return True
+
+    def count_enemies(self):
+        """Returns tuple of (alive enemies, total enemies) for the current floor"""
+        alive_count = sum(len(room.enemies) for room in self.rooms.values())
+        total_count = sum(room.total_enemies for room in self.rooms.values())
+        return alive_count, total_count
         
     def spawn_staircase(self):
         # Find boss room and spawn staircase

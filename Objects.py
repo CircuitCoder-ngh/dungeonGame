@@ -395,6 +395,13 @@ class Player:
         # ability.use()
 
     def move(self, dx: int, dy: int, walls: List[pygame.Rect]):
+        # Normalize diagonal movement by scaling the speed
+        length = (dx * dx + dy * dy) ** 0.5  # Calculate vector length
+        if length > 0:  # Avoid division by zero
+            # Scale dx and dy so diagonal movement isn't faster
+            dx = dx / length
+            dy = dy / length
+            
         # Calculate new position with diagonal movement
         new_x = self.x + dx * self.speed
         new_y = self.y + dy * self.speed

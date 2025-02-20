@@ -23,7 +23,39 @@ class Game:
 
         # Mark starting room as explored
         self.dungeon.rooms[self.dungeon.current_room_pos].explored = True
-    
+        # New attributes for floor tiles
+        self.feat_spritesheet = pygame.image.load("tiles/feat.png").convert_alpha()
+        self.feat_tile_size = 32
+        self.feat_tiles = self._load_feat_tiles()
+        row = 9  
+        col = 29  
+        self.staircase_sprite = self._get_sprite_from_sheet(row, col)
+        self.staircase_sprite = pygame.transform.scale(self.staircase_sprite, (80, 80))  # Match the size of the current rectangle
+
+        # self.floor_grid = self._generate_floor_grid()
+
+    def _load_feat_tiles(self):
+        tiles = []
+        sheet_width = self.feat_spritesheet.get_width()
+        sheet_height = self.feat_spritesheet.get_height()
+        x_offset = 2
+        y_offset = 2
+        
+        # Extract all 32x32 tiles from the spritesheet
+        for y in range(0, sheet_height, self.feat_tile_size):
+            for x in range(0, sheet_width, self.feat_tile_size):
+                rect = pygame.Rect(x+x_offset, y+y_offset, self.feat_tile_size, self.feat_tile_size)
+                tile = pygame.Surface((self.feat_tile_size, self.feat_tile_size), pygame.SRCALPHA)
+                tile.blit(self.feat_spritesheet, (0, 0), rect)
+                tiles.append(tile)
+        
+        return tiles
+
+    def _get_sprite_from_sheet(self, row: int, col: int) -> pygame.Surface:
+        """Get a specific sprite from the spritesheet by row and column."""
+        index = row * (self.feat_spritesheet.get_width() // self.feat_tile_size) + col
+        return self.feat_tiles[index]
+
     def _check_room_transition(self):
         current_room = self.dungeon.rooms[self.dungeon.current_room_pos]
         player_rect = pygame.Rect(self.player.x, self.player.y, 32, 32)
@@ -364,11 +396,12 @@ class Game:
                 if room.room_type == RoomType.BOSS and room.boss_defeated:
                     if pos == self.dungeon.current_room_pos:
                         stair_x, stair_y = self.camera.apply(room.width // 2, room.height // 2)
-                        # Draw staircase as a special rectangle
-                        stair_rect = pygame.Rect(stair_x - 40, stair_y - 40, 80, 80)
-                        pygame.draw.rect(self.screen, (0, 200, 200), stair_rect)
-                        pygame.draw.rect(self.screen, (0, 255, 255), stair_rect, 3)
-        
+                        # Draw staircase sprite
+                        stair_rect = self.staircase_sprite.get_rect(
+                            center=(stair_x, stair_y)
+                        )
+                        self.screen.blit(self.staircase_sprite, stair_rect)
+
         # Draw player with camera offset
         player_screen_x, player_screen_y = self.camera.apply(self.player.x, self.player.y)
 
@@ -398,6 +431,12 @@ class Game:
         text_surface = font.render(floor_text, True, (255, 255, 255))
         self.screen.blit(text_surface, (self.width - 150, 10))
         
+        # Draw enemy counter
+        alive_enemies, total_enemies = self.dungeon.count_enemies()
+        enemy_text = f"Enemies: {alive_enemies}/{total_enemies}"
+        enemy_surface = font.render(enemy_text, True, (255, 255, 255))
+        self.screen.blit(enemy_surface, (self.width - 150, 50))
+
         # Draw ability cooldowns
         y = 40
         for name, ability in self.player.abilities.items():
