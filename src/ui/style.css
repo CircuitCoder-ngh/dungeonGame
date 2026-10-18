@@ -51,12 +51,27 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: safe center;
   gap: 10px;
   padding: max(12px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
   background: radial-gradient(ellipse at center, rgba(20, 14, 30, 0.82), rgba(4, 3, 8, 0.95));
   overflow-y: auto;
   animation: fadein 0.18s ease-out;
+}
+
+.screen > * {
+  flex-shrink: 0;
+}
+
+.summary .list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: min(620px, 100%);
+}
+.summary .menu-col {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 @keyframes fadein {
@@ -499,5 +514,15 @@ html.portrait body::after {
 @media (min-width: 900px) {
   html.portrait body::after {
     display: none;
+  }
+}
+
+/* wide landscape screens: two-column lists so nothing needs scrolling */
+@media (min-width: 760px) {
+  .shrine .list,
+  .settings .list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: min(900px, 100%);
   }
 }
