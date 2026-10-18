@@ -1,3 +1,5 @@
+import { Capacitor } from '@capacitor/core';
+import { Haptics } from '@capacitor/haptics';
 import { setMusic, sfx } from '../engine/audio';
 import type { Input } from '../engine/input';
 import { angleTo, clamp, damp, dist, rand, Rng, TAU } from '../engine/math';
@@ -166,7 +168,7 @@ export class Game {
   get floorScale() {
     const f = this.floorNum - 1;
     const extra = Math.max(0, this.floorNum - FLOORS_TO_WIN);
-    return { hp: 1 + f * 0.42 + extra * extra * 0.08, dmg: 1 + f * 0.17 + extra * 0.06 };
+    return { hp: 1 + f * 0.42 + extra * extra * 0.08, dmg: 1 + f * 0.14 + extra * 0.06 };
   }
 
   enterFloor(n: number): void {
@@ -377,7 +379,7 @@ export class Game {
       e.kx += o.kx ?? 0;
       e.ky += o.ky ?? 0;
     }
-    if (settings.damageNumbers) this.fx.text(e.x, e.y - e.r - 4, String(amount), o.crit ? '#ffd23a' : o.color && o.silent ? o.color : '#fff', o.crit || o.big ? 9 : 7);
+    if (settings.damageNumbers && !(o.silent && amount < 6)) this.fx.text(e.x, e.y - e.r - 4, String(amount), o.crit ? '#ffd23a' : o.color && o.silent ? o.color : '#fff', o.crit || o.big ? 9 : 7);
     if (!o.silent) {
       sfx(o.crit ? 'crit' : 'hit', 1, 0.04);
       this.fx.burst(e.x, e.y, e.def.blood ?? '#a01818', o.big ? 7 : 3, 70, 2, 0.4);
@@ -424,7 +426,7 @@ export class Game {
       left -= v;
       this.addPickup('xp', e.x, e.y, v);
     }
-    const goldChance = e.boss ? 1 : e.elite ? 1 : 0.35;
+    const goldChance = e.boss ? 1 : e.elite ? 1 : 0.28;
     if (Math.random() < goldChance) {
       const amount = Math.round((e.boss ? 40 : e.elite ? 8 : rand(1, 3)) * (1 + this.floorNum * 0.15));
       const coins = e.boss ? 10 : e.elite ? 3 : 1;
@@ -1043,7 +1045,10 @@ export class Game {
 export function vibrate(pattern: number | number[]): void {
   if (!settings.vibration) return;
   try {
-    navigator.vibrate?.(pattern);
+    if (Capacitor.isNativePlatform()) {
+      const ms = Array.isArray(pattern) ? pattern.reduce((a, b) => a + b, 0) : pattern;
+      Haptics.vibrate({ duration: ms }).catch(() => {});
+    } else navigator.vibrate?.(pattern);
   } catch {
     /* not supported */
   }
