@@ -9,7 +9,7 @@ export const BOSSES: Record<string, EnemyDef & { title: string; minion: string }
   jelly_king: {
     id: 'jelly_king',
     name: 'The Royal Jelly',
-    title: 'Monarch of Ooze',
+    title: 'Gorger of the Offerings',
     sprite: 'boss_jelly',
     hp: 950,
     speed: 140,
@@ -26,7 +26,7 @@ export const BOSSES: Record<string, EnemyDef & { title: string; minion: string }
   hydra: {
     id: 'hydra',
     name: 'The Hydra',
-    title: 'Five-Headed Horror',
+    title: 'Drinker of Ashen Water',
     sprite: 'boss_hydra',
     hp: 1350,
     speed: 40,
@@ -41,8 +41,8 @@ export const BOSSES: Record<string, EnemyDef & { title: string; minion: string }
   },
   lich: {
     id: 'lich',
-    name: 'The Ancient Lich',
-    title: 'Lord of the Ossuary',
+    name: 'Vorhal the Oathbreaker',
+    title: 'First Warden of Hollowmere',
     sprite: 'boss_lich',
     hp: 1500,
     speed: 48,
@@ -59,8 +59,8 @@ export const BOSSES: Record<string, EnemyDef & { title: string; minion: string }
   },
   dragon: {
     id: 'dragon',
-    name: 'Frost Wyrm',
-    title: 'Terror of the Depths',
+    name: 'The Frost Wyrm',
+    title: 'The Cold Before the Fire',
     sprite: 'boss_dragon',
     hp: 1900,
     speed: 52,
@@ -77,7 +77,7 @@ export const BOSSES: Record<string, EnemyDef & { title: string; minion: string }
   balrug: {
     id: 'balrug',
     name: 'The Balrug',
-    title: 'Flame of Udun',
+    title: 'The Thing Beneath the Seal',
     sprite: 'boss_balrug',
     hp: 2500,
     speed: 50,

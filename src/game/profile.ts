@@ -25,6 +25,11 @@ export interface Stats {
   bossKills: number;
   bestTime: number; // seconds for a full clear, 0 = none
   seenTutorial: boolean;
+  introSeen: boolean;
+  /** one-time story hints already shown */
+  hints: string[];
+  /** floors whose full arrival dialogue has been heard */
+  storyFloors: number[];
 }
 
 /** Checkpoint written at the start of each floor so a run survives the app being closed. */
@@ -63,6 +68,9 @@ export const stats: Stats = load<Stats>('stats', {
   bossKills: 0,
   bestTime: 0,
   seenTutorial: false,
+  introSeen: false,
+  hints: [],
+  storyFloors: [],
 });
 
 export const saveSettings = () => save('settings', settings);

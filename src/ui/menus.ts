@@ -1,10 +1,11 @@
 import { App } from '@capacitor/app';
-import { applyVolumes, sfx } from '../engine/audio';
+import { applyVolumes, setMusic, sfx } from '../engine/audio';
 import { spriteURL } from '../engine/sprites';
 import type { Enemy } from '../game/enemies';
 import type { Game, RunSummary, ShopItem, UIHooks } from '../game/game';
 import type { Hud } from '../game/hud';
 import { loadRun, META_UPGRADES, meta, metaLevel, saveMeta, saveSettings, saveStats, settings, stats } from '../game/profile';
+import { DEATH_LINES, endingPanels, FLOOR_STORY, HERO_STORY, introPanels, Line, MAREN, Panel } from '../game/story';
 import { FLOORS_TO_WIN } from '../game/themes';
 import { HEROES, Upgrade, UPGRADE_BY_ID } from '../game/upgrades';
 
@@ -90,7 +91,7 @@ export class Menus implements UIHooks {
     const heroes = h('div', { class: 'title-heroes' }, ...HEROES.map((hr) => icon(hr.sprite, 'title-hero')));
     this.screen(
       'title',
-      h('div', { class: 'title-logo' }, h('div', { class: 'logo-small' }, 'Descend into the'), h('h1', {}, 'Dungeon Delve')),
+      h('div', { class: 'title-logo' }, h('div', { class: 'logo-small' }, 'The Heartfire of Hollowmere'), h('h1', {}, 'Dungeon Delve')),
       heroes,
       h(
         'div',
@@ -98,7 +99,7 @@ export class Menus implements UIHooks {
         run && this.btn(h('span', {}, `Continue — Floor ${run.floor}`), () => this.startContinue(), 'primary'),
         this.btn(run ? 'New Run' : 'Play', () => this.heroSelect(), run ? '' : 'primary'),
         this.btn(h('span', {}, 'Soul Shrine ', h('span', { class: 'souls' }, `◆ ${meta.souls}`)), () => this.shrine()),
-        h('div', { class: 'row' }, this.btn('Settings', () => this.settings(() => this.title())), this.btn('Records', () => this.records())),
+        h('div', { class: 'row' }, this.btn('Settings', () => this.settings(() => this.title())), this.btn('Chronicle', () => this.chronicle()), this.btn('Records', () => this.records())),
       ),
       h('div', { class: 'footer' }, 'Art: Dungeon Crawl Stone Soup tiles (CC0)'),
     );
@@ -120,7 +121,8 @@ export class Menus implements UIHooks {
         'div',
         { class: `card hero-card ${unlocked ? '' : 'locked'} ${meta.hero === hr.id ? 'selected' : ''}` },
         icon(hr.sprite, 'hero-img'),
-        h('h3', {}, hr.name),
+        h('h3', {}, hr.person),
+        h('div', { class: 'hero-class' }, `the ${hr.name}`),
         h('p', {}, hr.blurb),
         h('div', { class: 'stat-line' }, `HP ${s.maxHp ?? 100}`, h('span', {}, ' · '), `Speed ${s.speed ?? 105}`),
         unlocked
@@ -128,8 +130,14 @@ export class Menus implements UIHooks {
               meta.hero = hr.id;
               saveMeta();
               this.close();
-              if (!stats.seenTutorial) this.tutorial(() => this.game.newRun(hr.id));
-              else this.game.newRun(hr.id);
+              const start = () => (stats.seenTutorial ? this.game.newRun(hr.id) : this.tutorial(() => this.game.newRun(hr.id)));
+              if (stats.introSeen) start();
+              else
+                this.cutscene(introPanels(hr.id), () => {
+                  stats.introSeen = true;
+                  saveStats();
+                  start();
+                });
             }, 'primary')
           : this.btn(`Unlock ◆ ${hr.cost}`, () => {
               if (meta.souls < hr.cost) return sfx('deny');
@@ -406,6 +414,7 @@ export class Menus implements UIHooks {
     this.screen(
       `summary ${victory ? 'win' : 'lose'}`,
       h('h2', {}, title),
+      !victory && h('p', { class: 'sub story-line' }, `${HERO_STORY[hero.id]?.death ?? ''} `, h('span', { class: 'maren' }, `"${DEATH_LINES[Math.floor(Math.random() * DEATH_LINES.length)]}"`)),
       icon(hero.sprite, 'hero-img'),
       h(
         'div',
@@ -434,6 +443,107 @@ export class Menus implements UIHooks {
 
   banner(title: string, sub?: string): void {
     this.hud.banner(title, sub);
+  }
+
+  say(line: Line, delay = 0, urgent = false): void {
+    this.hud.say(line, delay, urgent);
+  }
+
+  ending(heroId: string, done: () => void): void {
+    this.hud.clearDialogue();
+    this.cutscene(endingPanels(heroId), done);
+  }
+
+  // ============================================================ story
+  /** Full-screen illustrated panels with typewriter text. Tap to advance. */
+  cutscene(panels: Panel[], onDone: () => void): void {
+    setMusic('menu');
+    let i = 0;
+    let timer = 0;
+    let typing = false;
+    const finish = () => {
+      clearInterval(timer);
+      this.close();
+      onDone();
+    };
+    const show = () => {
+      clearInterval(timer);
+      const p = panels[i];
+      const unit = Math.min(1.3, window.innerHeight / 400);
+      const stage = h(
+        'div',
+        { class: 'stage' },
+        ...p.art.map((a) => {
+          const img = icon(a.sprite, `actor ${a.anim ?? ''}`) as HTMLImageElement;
+          img.src = spriteURL(a.sprite, 2, a.frame ?? 0);
+          const size = 32 * (a.scale ?? 3) * unit;
+          img.style.cssText = `left:${a.x}%;top:${a.y}%;width:${size}px;height:auto;--flip:${a.flip ? -1 : 1}`;
+          return img;
+        }),
+      );
+      const body = h('p', { class: 'cut-text' });
+      const box = h('div', { class: 'cut-box' }, p.speaker && h('div', { class: 'cut-speaker' }, p.speaker), body);
+      const hint = h('div', { class: 'cut-hint' }, i < panels.length - 1 ? 'tap to continue' : 'tap to begin');
+      const el = this.screen(
+        'cutscene',
+        stage,
+        box,
+        hint,
+        h('div', { class: 'cut-dots' }, ...panels.map((_, k) => h('span', { class: k === i ? 'on' : '' }))),
+        this.btn('Skip', finish, 'skip'),
+      );
+      el.style.background = `radial-gradient(ellipse at 50% 55%, ${p.sky ?? '#1a1424'} 0%, #050308 75%)`;
+      if (p.speaker === MAREN) box.classList.add('maren');
+      // typewriter
+      let n = 0;
+      typing = true;
+      timer = window.setInterval(() => {
+        n += 2;
+        body.textContent = p.text.slice(0, n);
+        if (n >= p.text.length) {
+          clearInterval(timer);
+          typing = false;
+        }
+      }, 28);
+      el.addEventListener('click', () => {
+        if (typing) {
+          clearInterval(timer);
+          body.textContent = p.text;
+          typing = false;
+          return;
+        }
+        sfx('click');
+        i++;
+        if (i >= panels.length) finish();
+        else show();
+      });
+    };
+    show();
+  }
+
+  private chronicle(): void {
+    const entries = FLOOR_STORY.map((f, i) => {
+      const unlocked = stats.bestFloor >= i + 1;
+      return h(
+        'div',
+        { class: `lore ${unlocked ? '' : 'locked'}` },
+        h('b', {}, unlocked ? `${i + 1}. ${f.title}` : `${i + 1}. ???`),
+        h('p', {}, unlocked ? f.lore : 'Descend further to learn more.'),
+      );
+    });
+    this.screen(
+      'chronicle',
+      h('h2', {}, 'Chronicle'),
+      h('p', { class: 'sub' }, 'The tale of the Heartfire, as far as you have uncovered it.'),
+      h('div', { class: 'list' }, ...entries),
+      h(
+        'div',
+        { class: 'row' },
+        this.btn('Replay prologue', () => this.cutscene(introPanels(meta.hero), () => this.chronicle())),
+        stats.wins > 0 && this.btn('Replay ending', () => this.cutscene(endingPanels(meta.hero), () => this.chronicle())),
+        this.btn('Back', () => this.title()),
+      ),
+    );
   }
 
   bossBar(e: Enemy | null): void {

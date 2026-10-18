@@ -28,6 +28,16 @@ BRIGHTNESS = {
 }
 
 
+def ghostly(img):
+    """Spectral version of a sprite: pale blue, translucent, with a soft outline."""
+    from PIL import ImageOps
+    a = img.getchannel('A')
+    grey = ImageOps.grayscale(img.convert('RGB'))
+    tinted = ImageOps.colorize(grey, black=(30, 60, 110), white=(210, 245, 255))
+    tinted.putalpha(a.point(lambda v: int(v * 0.78)))
+    return tinted
+
+
 def main():
     entries = []
     for fn in sorted(os.listdir(SRC)):
@@ -42,6 +52,8 @@ def main():
                 rgb = ImageEnhance.Brightness(img.convert('RGB')).enhance(k)
                 rgb.putalpha(img.getchannel('A'))
                 img = rgb
+        if name.endswith('_ghost'):
+            img = ghostly(img)
         entries.append((name, frame, img))
 
     # shelf packing, tallest first

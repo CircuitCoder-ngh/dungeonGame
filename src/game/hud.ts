@@ -1,9 +1,10 @@
 import { ButtonId, ButtonRect, Input, JOY_RADIUS } from '../engine/input';
 import { TAU } from '../engine/math';
-import { drawSprite } from '../engine/sprites';
+import { drawSprite, spriteSize } from '../engine/sprites';
 import type { Enemy } from './enemies';
 import type { Game } from './game';
 import { settings } from './profile';
+import type { Line } from './story';
 
 export const FONT = '"Pixelify Sans", system-ui, sans-serif';
 
@@ -24,12 +25,36 @@ export class Hud {
   private bannerSub = '';
   boss: Enemy | null = null;
   private bossShown = 0;
+  /** queued dialogue; the head is the line being shown */
+  private dialogue: { line: Line; wait: number; t: number }[] = [];
 
   constructor(
     private ctx: CanvasRenderingContext2D,
     private game: Game,
     private input: Input,
   ) {}
+
+  /** Queue a line of dialogue (non-blocking). `delay` is extra wait before it appears. */
+  say(line: Line, delay = 0, urgent = false): void {
+    // drop stale chatter rather than letting a backlog build up
+    if (this.dialogue.length > 4) this.dialogue.splice(1, this.dialogue.length - 4);
+    const entry = { line, wait: delay, t: 0 };
+    if (!urgent) this.dialogue.push(entry);
+    else {
+      // urgent lines go next; cut the current line short if it has been read
+      const head = this.dialogue[0];
+      if (head && head.wait <= 0 && head.t > 1.2) head.t = Math.max(head.t, this.duration(head.line));
+      this.dialogue.splice(head && head.wait <= 0 ? 1 : 0, 0, entry);
+    }
+  }
+
+  private duration(line: Line): number {
+    return 2.2 + line.text.length / 24;
+  }
+
+  clearDialogue(): void {
+    this.dialogue = [];
+  }
 
   banner(title: string, sub = ''): void {
     this.bannerTitle = title;
@@ -76,6 +101,7 @@ export class Hud {
     this.drawMinimap(W - 14 - I.right - 46, top);
     this.drawBossBar(W, top, dt);
     this.drawBanner(W, H);
+    this.drawDialogue(W, H, g.state === 'play' ? dt : 0);
     this.drawControls(W, H);
 
     // red vignette when low on health
@@ -221,6 +247,56 @@ export class Hud {
     ctx.globalAlpha = 1;
   }
 
+  private drawDialogue(W: number, H: number, dt: number): void {
+    const head = this.dialogue[0];
+    if (!head) return;
+    if (head.wait > 0) {
+      head.wait -= dt;
+      return;
+    }
+    head.t += dt;
+    const { line } = head;
+    const dur = this.duration(line);
+    if (head.t > dur + 0.35) {
+      this.dialogue.shift();
+      return;
+    }
+    const { ctx } = this;
+    const I = this.insets;
+    const a = Math.min(1, head.t * 5, (dur + 0.35 - head.t) * 3);
+    const w = Math.min(480, W - I.left - I.right - 360);
+    const fs = 13;
+    ctx.font = `500 ${fs}px ${FONT}`;
+    const shown = line.text.slice(0, Math.floor(head.t * 48));
+    const lines = wrap(ctx, line.text, w - 78);
+    const h = Math.max(62, 30 + lines.length * (fs + 4));
+    const x = (W - w) / 2;
+    const y = H - 12 - I.bottom - h;
+    ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(8,6,16,0.82)';
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = line.color ?? 'rgba(255,230,190,0.4)';
+    ctx.globalAlpha = a * 0.7;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    ctx.globalAlpha = a;
+    // portrait
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    ctx.fillRect(x + 8, y + 8, 48, 48);
+    const [pw, ph] = spriteSize(line.portrait);
+    drawSprite(ctx, line.portrait, 0, x + 32, y + 32 + Math.sin(head.t * 3) * 1, { scale: Math.min(1.4, 46 / Math.max(pw, ph)) });
+    text(ctx, line.speaker, x + 66, y + 13, 13, line.color ?? '#ffe2b0', 'left', true);
+    // typewriter body: reveal the wrapped lines progressively
+    let remaining = shown.length;
+    ctx.font = `500 ${fs}px ${FONT}`;
+    for (let i = 0; i < lines.length && remaining > 0; i++) {
+      const part = lines[i].slice(0, remaining);
+      remaining -= lines[i].length + 1;
+      text(ctx, part, x + 66, y + 31 + i * (fs + 4), fs, '#eadfce', 'left');
+    }
+    ctx.globalAlpha = 1;
+  }
+
   private drawControls(W: number, H: number): void {
     const { ctx, game: g, input } = this;
     const I = this.insets;
@@ -331,4 +407,18 @@ export function text(ctx: CanvasRenderingContext2D, s: string, x: number, y: num
   ctx.strokeText(s, x, y);
   ctx.fillStyle = color;
   ctx.fillText(s, x, y);
+}
+
+function wrap(ctx: CanvasRenderingContext2D, s: string, width: number): string[] {
+  const out: string[] = [];
+  let cur = '';
+  for (const word of s.split(' ')) {
+    const next = cur ? `${cur} ${word}` : word;
+    if (ctx.measureText(next).width > width && cur) {
+      out.push(cur);
+      cur = word;
+    } else cur = next;
+  }
+  if (cur) out.push(cur);
+  return out;
 }

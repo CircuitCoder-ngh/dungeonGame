@@ -52,6 +52,8 @@ export interface PlayerStats {
 export interface Hero {
   id: string;
   name: string;
+  /** the character's own name, used by the story */
+  person: string;
   sprite: string;
   blurb: string;
   cost: number;
@@ -66,8 +68,8 @@ const BASE: PlayerStats = {
   regen: 0,
   dmgMult: 1,
   boltDmg: 10,
-  boltRate: 2.4,
-  boltSpeed: 270,
+  boltRate: 3.0,
+  boltSpeed: 300,
   boltRange: 260,
   boltCount: 1,
   boltPierce: 0,
@@ -107,8 +109,9 @@ export const HEROES: Hero[] = [
   {
     id: 'knight',
     name: 'Knight',
+    person: 'Aldric',
     sprite: 'hero_knight',
-    blurb: 'Sturdy and armoured. A brutal sword slash and a steady bolt.',
+    blurb: 'Sworn shield of the Wardens. Armoured, with a brutal sword slash.',
     cost: 0,
     color: '#9fd8ff',
     stats: { maxHp: 130, armor: 0.1, slashDmg: 36, slashArc: Math.PI * 0.85, boltDmg: 9 },
@@ -116,20 +119,22 @@ export const HEROES: Hero[] = [
   {
     id: 'mage',
     name: 'Arcanist',
+    person: 'Ysolde',
     sprite: 'hero_mage',
-    blurb: 'Fragile but deadly. Fast-firing bolts and a huge nova.',
+    blurb: "Maren's apprentice. Fragile, but her bolts and nova are deadly.",
     cost: 60,
     color: '#d88cff',
-    stats: { maxHp: 85, boltDmg: 12, boltRate: 3.2, boltSpeed: 300, novaRadius: 92, novaDps: 26, novaCd: 6, slashDmg: 22 },
+    stats: { maxHp: 85, boltDmg: 12, boltRate: 3.9, boltSpeed: 330, novaRadius: 92, novaDps: 26, novaCd: 6, slashDmg: 22 },
   },
   {
     id: 'rogue',
     name: 'Ranger',
+    person: 'Corwin',
     sprite: 'hero_rogue',
-    blurb: 'Quick and evasive. Two dash charges and deadly critical hits.',
+    blurb: "Maren's brother, a hunter. Quick, evasive, deadly critical hits.",
     cost: 100,
     color: '#b6ff8a',
-    stats: { maxHp: 100, speed: 122, crit: 0.18, critMult: 2.4, dashCharges: 2, dashCd: 0.9, slashCd: 0.8, boltRate: 2.8 },
+    stats: { maxHp: 100, speed: 122, crit: 0.18, critMult: 2.4, dashCharges: 2, dashCd: 0.9, slashCd: 0.8, boltRate: 3.5 },
   },
 ];
 

@@ -11,6 +11,7 @@ import { Enemy, ENEMIES, ShotDef } from './enemies';
 import { Player } from './player';
 import { clearRun, meta, metaLevel, RunSave, saveMeta, saveRun, saveStats, settings, stats } from './profile';
 import { Bullet } from './projectiles';
+import { BOSS_STORY, ENDLESS_LINE, FLOOR_STORY, HERO_STORY, HINTS, Line, maren } from './story';
 import { FLOORS_TO_WIN } from './themes';
 import { rollUpgrades, Upgrade, UPGRADE_BY_ID } from './upgrades';
 
@@ -54,6 +55,8 @@ export interface UIHooks {
   victory(summary: RunSummary): void;
   banner(title: string, sub?: string): void;
   bossBar(e: Enemy | null): void;
+  say(line: Line, delay?: number, urgent?: boolean): void;
+  ending(heroId: string, done: () => void): void;
 }
 
 interface Lob {
@@ -107,6 +110,8 @@ export class Game {
   private spawnDelay = 0;
   combo = 0;
   comboT = 0;
+  /** Maren's spirit: a wisp that floats by the hero and leads the way */
+  wisp = { x: 0, y: 0, guiding: false };
 
   constructor(
     public input: Input,
@@ -185,6 +190,34 @@ export class Game {
       stats.bestFloor = n;
       saveStats();
     }
+    this.arrivalDialogue(n);
+  }
+
+  /** Maren (and the hero) speak on reaching a floor; the full speech only the first time. */
+  private arrivalDialogue(n: number): void {
+    const p = this.player;
+    const hs = HERO_STORY[p.hero.id];
+    const idx = (n - 1) % FLOOR_STORY.length;
+    const heroLine: Line = { speaker: p.hero.person, portrait: p.hero.sprite, text: hs.arrive[idx], color: '#ffe2b0' };
+    if (n > FLOORS_TO_WIN) {
+      this.ui.say(ENDLESS_LINE, 1.6);
+      return;
+    }
+    const first = !stats.storyFloors.includes(n);
+    if (first) {
+      stats.storyFloors.push(n);
+      saveStats();
+      FLOOR_STORY[idx].lines.forEach((l, i) => this.ui.say(maren(l), i === 0 ? 1.6 : 0));
+      this.ui.say(heroLine);
+    } else this.ui.say(heroLine, 1.6);
+  }
+
+  /** Show a one-time piece of guidance from Maren. */
+  hint(id: string): void {
+    if (stats.hints.includes(id) || !HINTS[id]) return;
+    stats.hints.push(id);
+    saveStats();
+    this.ui.say(maren(HINTS[id]), 0, true);
   }
 
   enterRoom(room: Room, fromDir: number): void {
@@ -213,15 +246,23 @@ export class Game {
       p.y = room.ph / 2 + TILE;
     }
     p.dashT = 0;
+    this.wisp.x = p.x;
+    this.wisp.y = p.y - 24;
     this.featureLock = false;
     this.snapCamera();
     this.boss = null;
     this.ui.bossBar(null);
     this.wave = 0;
 
+    if (room.kind === 'treasure') this.hint('treasure');
+    else if (room.kind === 'shop') this.hint('shop');
+    else if (room.kind === 'fountain') this.hint('fountain');
+    if (room.kind !== 'boss' && !this.floor.boss.cleared && room.doors.some((open, d) => open && this.floor.neighbor(room, d) === this.floor.boss)) this.hint('bossdoor');
+
     if (!room.cleared) {
       room.locked = true;
       this.spawnDelay = 0.35;
+      if (room.kind === 'combat') this.hint('locked');
       if (room.kind === 'boss') {
         const def = BOSSES[this.floor.theme.boss];
         this.ui.banner(def.name, def.title);
@@ -242,6 +283,8 @@ export class Game {
       e.spawnT = 1.2;
       this.boss = e;
       this.ui.bossBar(e);
+      const story = BOSS_STORY[def.id];
+      if (story) this.ui.say({ speaker: def.name, portrait: def.sprite, text: story.taunt, color: '#ff9a7a' }, 0.8, true);
       return;
     }
     const theme = this.floor.theme;
@@ -271,6 +314,7 @@ export class Game {
   spawnEnemy(id: string, x: number, y: number, opts: { elite?: boolean; noDrops?: boolean } = {}): Enemy {
     const def = ENEMIES[id];
     const e = new Enemy(def, x, y, this.floorScale, !!opts.elite);
+    if (opts.elite) this.hint('elite');
     if (opts.noDrops) (e as Enemy & { noDrops?: boolean }).noDrops = true;
     this.enemies.push(e);
     this.fx.ring(x, y, 4, 22, '#b07cff', 0.5, 2);
@@ -461,6 +505,7 @@ export class Game {
     p.x = res[0];
     p.y = res[1];
     if (p.hp <= 0) this.onPlayerDeath();
+    else if (p.hp < p.stats.maxHp * 0.3) this.hint('lowhp');
   }
 
   private moveSafe(x: number, y: number, dx: number, dy: number): [number, number] {
@@ -485,6 +530,8 @@ export class Game {
     this.shake(8);
     this.fx.ring(e.x, e.y, 10, 120, '#ff3030', 0.6, 5);
     this.ui.banner('', `${e.def.name} is enraged!`);
+    const story = BOSS_STORY[e.def.id];
+    if (story) this.ui.say({ speaker: e.def.name, portrait: e.def.sprite, text: story.enrage, color: '#ff9a7a' }, 0, true);
     for (const b of this.bullets) if (b.team === 'enemy') b.dead = true;
   }
 
@@ -494,6 +541,8 @@ export class Game {
     saveStats();
     this.boss = null;
     this.ui.bossBar(null);
+    const story = BOSS_STORY[e.def.id];
+    if (story) this.ui.say(maren(story.defeat), 1.2, true);
     this.slowmo = 0.25;
     this.shake(12);
     sfx('explode');
@@ -595,6 +644,7 @@ export class Game {
     this.state = 'modal';
     this.ui.levelUp(opts, `Level ${this.level - this.pendingLevels}`, (u) => {
       if (u) this.takeUpgrade(u);
+      this.hint('levelup');
       this.state = 'play';
       this.input.reset();
     });
@@ -614,7 +664,7 @@ export class Game {
         this.transition(() => {
           if (this.floorNum === FLOORS_TO_WIN && !this.endless) {
             this.state = 'victory';
-            this.finishRun(true);
+            this.ui.ending(this.player.hero.id, () => this.finishRun(true));
           } else this.enterFloor(this.floorNum + 1);
         });
         break;
@@ -738,6 +788,7 @@ export class Game {
 
     if (this.state === 'play') p.update(this, this.input, dt);
     else this.input.clearPressed();
+    this.updateWisp(dt);
     this.flow.update(p.x, p.y);
 
     // spawn waves
@@ -807,6 +858,7 @@ export class Game {
       if (nb) nb.known = true;
     }
     for (const pk of this.pickups) pk.pulled = true;
+    if (room.kind !== 'boss') this.hint('cleared');
     if (room.kind === 'boss') {
       room.feature = { kind: 'stairs', x: room.pw / 2, y: room.ph / 2, used: false };
       setMusic(this.floor.theme.id, false);
@@ -849,6 +901,7 @@ export class Game {
         if (!p.dead && p.invuln <= 0 && dist(b.x, b.y, p.x, p.y) < b.r + p.r - 3) {
           b.dead = true;
           this.hurtPlayer(b.dmg, b.x, b.y);
+          this.hint('bullets');
         }
         continue;
       }
@@ -1009,6 +1062,66 @@ export class Game {
       this.featureLock = true;
       this.useFeature(f);
     }
+  }
+
+  // ================================================================ guidance
+  private updateWisp(dt: number): void {
+    const p = this.player;
+    const w = this.wisp;
+    let tx = p.x - p.facing * 16;
+    let ty = p.y - 26 + Math.sin(this.time * 2.2) * 3;
+    w.guiding = false;
+    const goal = this.room.locked ? null : this.guideTarget();
+    if (goal) {
+      const d = dist(p.x, p.y, goal[0], goal[1]);
+      if (d > 28) {
+        // lead the way, but never stray too far from the hero
+        const k = Math.min(1, 110 / d);
+        tx = p.x + (goal[0] - p.x) * k;
+        ty = p.y + (goal[1] - p.y) * k - 12 + Math.sin(this.time * 3) * 4;
+        w.guiding = true;
+      }
+    }
+    w.x = damp(w.x, tx, w.guiding ? 2.2 : 4, dt);
+    w.y = damp(w.y, ty, w.guiding ? 2.2 : 4, dt);
+  }
+
+  /** Where the wisp leads: the next door toward the boss, or the stairs once it's beaten. */
+  private guideTarget(): [number, number] | null {
+    const room = this.room;
+    if (room.feature?.kind === 'stairs') return [room.feature.x, room.feature.y];
+    if (room === this.floor.boss) return null;
+    // breadth-first search across the room graph to the boss room
+    const target = this.floor.boss;
+    const prev = new Map<Room, [Room, number]>();
+    const queue: Room[] = [room];
+    const seen = new Set<Room>([room]);
+    while (queue.length) {
+      const r = queue.shift()!;
+      if (r === target) break;
+      for (let d = 0; d < 4; d++) {
+        if (!r.doors[d]) continue;
+        const nb = this.floor.neighbor(r, d);
+        if (nb && !seen.has(nb)) {
+          seen.add(nb);
+          prev.set(nb, [r, d]);
+          queue.push(nb);
+        }
+      }
+    }
+    let step: Room = target;
+    let dir = -1;
+    while (prev.has(step)) {
+      const [from, d] = prev.get(step)!;
+      if (from === room) {
+        dir = d;
+        break;
+      }
+      step = from;
+    }
+    if (dir < 0) return null;
+    const [cx, cy] = room.doorCells(dir)[1];
+    return [(cx + 0.5) * TILE, (cy + 0.5) * TILE];
   }
 
   // ================================================================ camera

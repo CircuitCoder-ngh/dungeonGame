@@ -526,3 +526,154 @@ html.portrait body::after {
     width: min(900px, 100%);
   }
 }
+
+/* ------------------------------------------------------------ story */
+.hero-class {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: -6px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+.story-line {
+  font-style: italic;
+}
+.maren {
+  color: #9fe6ff;
+}
+
+.cutscene {
+  justify-content: flex-end;
+  gap: 8px;
+  cursor: pointer;
+}
+.stage {
+  position: relative;
+  width: min(760px, 100%);
+  flex: 1 1 auto;
+  min-height: 120px;
+}
+.actor {
+  position: absolute;
+  image-rendering: pixelated;
+  transform: translate(-50%, -100%) scaleX(var(--flip, 1));
+  filter: drop-shadow(0 6px 6px rgba(0, 0, 0, 0.6));
+  animation: actor-in 0.6s ease-out backwards;
+}
+.actor.float {
+  animation: actor-in 0.6s ease-out backwards, float 2.4s ease-in-out infinite;
+}
+.actor.pulse {
+  animation: actor-in 0.6s ease-out backwards, pulse 1.6s ease-in-out infinite;
+}
+.actor.flicker {
+  animation: actor-in 0.6s ease-out backwards, flicker 0.9s steps(3) infinite;
+}
+.actor.sway {
+  transform-origin: 50% 100%;
+  animation: actor-in 0.6s ease-out backwards, sway 4s ease-in-out infinite;
+}
+@keyframes actor-in {
+  from {
+    opacity: 0;
+    translate: 0 10px;
+  }
+}
+@keyframes float {
+  50% {
+    translate: 0 -10px;
+  }
+}
+@keyframes pulse {
+  50% {
+    scale: 1.07;
+    filter: drop-shadow(0 0 22px rgba(255, 150, 60, 0.9));
+  }
+}
+@keyframes flicker {
+  50% {
+    opacity: 0.65;
+    scale: 0.96;
+  }
+}
+@keyframes sway {
+  50% {
+    rotate: 2deg;
+  }
+}
+.cut-box {
+  width: min(720px, 100%);
+  background: rgba(8, 6, 16, 0.86);
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 18px;
+  min-height: 78px;
+}
+.cut-box.maren {
+  border-color: rgba(159, 230, 255, 0.55);
+}
+.cut-speaker {
+  color: #9fe6ff;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.cut-text {
+  font-size: clamp(15px, 4.2vh, 19px);
+  line-height: 1.4;
+  white-space: pre-line;
+  color: var(--text);
+}
+.cut-hint {
+  font-size: 12px;
+  color: #6c6170;
+  animation: blink 1.6s ease-in-out infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0.3;
+  }
+}
+.cut-dots {
+  display: flex;
+  gap: 5px;
+}
+.cut-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #3a3344;
+}
+.cut-dots span.on {
+  background: #ffb27a;
+}
+.btn.skip {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  right: max(14px, env(safe-area-inset-right));
+  min-height: 36px;
+  padding: 4px 16px;
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+.lore {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+.lore p {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 2px;
+}
+.lore.locked {
+  opacity: 0.45;
+}
+@media (min-width: 760px) {
+  .chronicle .list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: min(900px, 100%);
+  }
+}

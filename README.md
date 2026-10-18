@@ -1,5 +1,11 @@
 # Dungeon Delve
 
+*The Heartfire of Hollowmere.* Beneath the town of Hollowmere burns the
+Heartfire, a flame that keeps something ancient sealed away. Warden Maren went
+down to tend it and never came back; now the dead stir and the wells freeze.
+Descend as Aldric, Ysolde or Corwin, follow the spirit-light of Maren, and
+rekindle the fire.
+
 A fast, mobile-first roguelite dungeon crawler. Fight through five themed floors
 of procedurally generated rooms, level up with stacking upgrades, beat each
 floor's boss, and spend souls on permanent power between runs.
@@ -68,7 +74,9 @@ folder in Android Studio.
 - `src/game/` — dungeon generation, collision and flow-field pathfinding,
   player, enemies (generator-based AI "brains"), bosses, upgrades, renderer
   (pixel-scaled world + dynamic lighting) and HUD.
-- `src/ui/` — DOM menus and styles.
+- `src/game/story.ts` — all the story writing (prologue, Maren's guidance,
+  hero and boss lines, lore, ending) in one place for easy editing.
+- `src/ui/` — DOM menus, cutscenes and styles.
 - `art/tiles/` — the individual sprites; `python3 tools/build_atlas.py` packs
   them into `public/assets/atlas.png` + `src/assets/atlas.json`.
 - `android/` — Capacitor Android project (landscape, immersive full-screen).

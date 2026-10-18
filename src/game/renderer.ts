@@ -208,6 +208,10 @@ export class Renderer {
       ctx.globalAlpha = b.team === 'enemy' ? 0.55 : 0.4;
       ctx.drawImage(tintedGlow(b.color), b.x - r, b.y - r, r * 2, r * 2);
     }
+    if (!g.player.dead) {
+      ctx.globalAlpha = 0.55 + Math.sin(t * 4) * 0.15;
+      ctx.drawImage(tintedGlow('#7fd8ff'), g.wisp.x - 20, g.wisp.y - 20, 40, 40);
+    }
     ctx.globalAlpha = 0.5;
     for (const p of g.fx.particles) {
       if (!p.glow) continue;
@@ -435,6 +439,13 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(sx, sy, 6 + Math.sin(t * 6 + i) * 1, 0, TAU);
       ctx.stroke();
+    }
+
+    // Maren's wisp
+    if (!p.dead) {
+      const w = g.wisp;
+      drawSprite(ctx, 'wisp_guide', 0, w.x, w.y, { scale: 0.75, alpha: 0.9, flip: w.x > p.x });
+      if (w.guiding && Math.random() < 0.3) g.fx.particles.push({ x: w.x, y: w.y + 4, vx: (Math.random() - 0.5) * 8, vy: 6, life: 0.6, max: 0.6, color: '#7fd8ff', size: 1.5, drag: 1, grav: 0, glow: true });
     }
 
     // chain lightning
@@ -713,6 +724,7 @@ export class Renderer {
     for (const h of g.hazards) if (!h.fired && h.kind === 'circle') hole(h.x, h.y, h.r * 1.6, 0.6);
     const f = g.room.feature;
     if (f) hole(f.x, f.y, 90, 0.8);
+    if (!p.dead) hole(g.wisp.x, g.wisp.y, 70, 0.75);
     if (p.novaT > 0) hole(p.x, p.y, p.stats.novaRadius * 1.4, 0.7);
     lctx.globalAlpha = 1;
     lctx.globalCompositeOperation = 'source-over';

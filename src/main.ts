@@ -33,6 +33,8 @@ const game = new Game(input, {
   victory: (s) => menus.victory(s),
   banner: (t, s) => menus.banner(t, s),
   bossBar: (e) => menus.bossBar(e),
+  say: (line, delay, urgent) => menus.say(line, delay, urgent),
+  ending: (id, done) => menus.ending(id, done),
 });
 const hud = new Hud(ctx, game, input);
 menus = new Menus(game, hud);
