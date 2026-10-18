@@ -661,8 +661,8 @@ export class Game {
   private shopStock(f: Feature): ShopItem[] {
     let items = this.shopCache.get(f);
     if (!items) {
-      const scale = 1 + (this.floorNum - 1) * 0.35;
-      const ups = rollUpgrades(this.player.upgrades, 2, () => this.rng.next());
+      const scale = 1 + (this.floorNum - 1) * 0.45;
+      const ups = rollUpgrades(this.player.upgrades, 3, () => this.rng.next());
       items = [
         { kind: 'potion', price: Math.round(18 * scale), sold: false },
         ...ups.map((u) => ({ kind: 'upgrade' as const, upgrade: u.id, price: Math.round((u.rarity === 'epic' ? 75 : u.rarity === 'rare' ? 55 : 38) * scale), sold: false })),
