@@ -1,0 +1,104 @@
+apply plugin: 'com.android.application'
+
+// ---------------------------------------------------------------------------
+// Versioning: CI sets the env var VERSION_CODE (= GitHub run number) so every build
+// installs as an update over the previous one. Also accepted as a Gradle property
+// (./gradlew assembleRelease -PVERSION_CODE=42). VERSION_NAME is optional.
+// ---------------------------------------------------------------------------
+def envOrProp = { String name, String fallback ->
+    def value = System.getenv(name)
+    if (value == null || value.trim().isEmpty()) {
+        value = project.findProperty(name)?.toString()
+    }
+    return (value == null || value.trim().isEmpty()) ? fallback : value.trim()
+}
+def appVersionCode = envOrProp('VERSION_CODE', '1').toInteger()
+def appVersionName = envOrProp('VERSION_NAME', "1.0.${appVersionCode}".toString())
+
+// ---------------------------------------------------------------------------
+// Release signing.
+// If ANDROID_KEYSTORE_PATH is set (CI decodes the ANDROID_KEYSTORE_BASE64 secret), sign
+// with that keystore using ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS /
+// ANDROID_KEY_PASSWORD. Otherwise fall back to the dev keystore committed next to this
+// file (alias/passwords: dungeondelve).
+//
+// TRADEOFF: Android only installs an update over an existing app if both APKs are signed
+// with the same key, so every CI build must use one stable key. Committing the dev key
+// makes that work with zero setup, but anyone with repo access can sign APKs that
+// install as "updates" of this app. That's acceptable for a personal sideloaded game; for
+// anything distributed more widely, add your own keystore as repo secrets instead (and
+// note that switching keys requires uninstalling the dev-signed app once).
+// ---------------------------------------------------------------------------
+def releaseKeystorePath = System.getenv('ANDROID_KEYSTORE_PATH')
+def useCustomKeystore = releaseKeystorePath != null && !releaseKeystorePath.trim().isEmpty()
+
+android {
+    namespace = "io.github.circuitcoder.dungeondelve"
+    compileSdk = rootProject.ext.compileSdkVersion
+    signingConfigs {
+        release {
+            if (useCustomKeystore) {
+                storeFile file(releaseKeystorePath.trim())
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+            } else {
+                storeFile file('dungeondelve-dev.keystore')
+                storePassword 'dungeondelve'
+                keyAlias 'dungeondelve'
+                keyPassword 'dungeondelve'
+            }
+        }
+    }
+    defaultConfig {
+        applicationId "io.github.circuitcoder.dungeondelve"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode appVersionCode
+        versionName appVersionName
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    // WindowCompat / WindowInsetsControllerCompat used by MainActivity (immersive mode).
+    implementation "androidx.core:core:$androidxCoreVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

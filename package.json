@@ -8,10 +8,19 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host",
     "typecheck": "tsc --noEmit",
-    "atlas": "python3 tools/build_atlas.py"
+    "atlas": "python3 tools/build_atlas.py",
+    "android:sync": "npm run build && cap sync android",
+    "android:apk": "npm run android:sync && cd android && ./gradlew assembleRelease"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
     "typescript": "^5.9.3",
     "vite": "^8.3.4"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.3",
+    "@fontsource/pixelify-sans": "^5.3.0"
   }
 }

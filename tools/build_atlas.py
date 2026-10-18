@@ -18,10 +18,11 @@ PAD = 1
 
 # Per-prefix brightness tweaks so the darker DCSS floors read well under the lighting.
 BRIGHTNESS = {
-    'floor_crypt': 1.35,
-    'floor_sewer': 1.3,
-    'floor_bone': 1.35,
-    'floor_hell': 1.25,
+    'floor_crypt': 1.6,
+    'floor_sewer': 1.5,
+    'floor_bone': 1.8,
+    'floor_hell': 1.0,
+    'wall_hell': 0.6,
     'floor_ice': 0.9,
     'wall_ice': 0.85,
 }
